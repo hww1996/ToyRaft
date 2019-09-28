@@ -7,71 +7,121 @@
 
 #ifndef TOYRAFT_RAFT_H
 
-namespace ToyRaft{
+namespace ToyRaft {
+    enum SendType {
+        REQVOTE,
+        VOTERSP,
+        REQAPPEND,
+        APPENDRSP,
+    };
 
-class RequestVote{
-private:
-    int term;
-    int candidateId;
-    int lastLogTerm;
-    int lastCommitLogIndex;
-};
+    struct RequestVote {
+        int term;
+        int candidateId;
+        int lastLogTerm;
+        int lastAppliedLogIndex;
+    };
 
-class RequestVoteResponse{
-private:
-    int term;
-    bool voteForMe;
-};
+    struct RequestVoteResponse {
+        int term;
+        bool voteForMe;
+    };
 
-typedef char* LogType;
+    enum LogType {
+        APPEND
+    };
 
-class RequestAppend{
-private:
-    int term;
-    int preLogTerm;
-    int preLogIndex;
-    int leaderCommit;
-    std::vector<LogType> entries;
-};
+    struct RaftLog {
+        int term;
+        LogType type;
+        char *buf;
+        int len;
+    };
 
-class RequestAppendResponse{
-private:
-    int term;
-    bool success;
-    int currentIndex;
-    int firstAppliedIndex;
-};
+    struct RequestAppend {
+        int term;
+        int id;
+        int preLogTerm;
+        int preLogIndex;
+        int leaderCommit;
+        std::vector<RaftLog> entries;
+    };
 
-enum Status{
-    FOLLOWER,
-    CANDIDATE,
-    LEADER,
-};
+    struct RequestAppendResponse {
+        int term;
+        bool success;
+        int currentIndex;
+        int firstAppliedIndex;
+    };
 
-class Server{
-private:
-    int id;
-    int Term;
-    int votedFor;
+    struct AllSend {
+        SendType sendType;
+        std::shared_ptr<RequestVote> requestVote;
+        std::shared_ptr<RequestVoteResponse> requestVoteResponse;
+        std::shared_ptr<RequestAppend> requestAppend;
+        std::shared_ptr<RequestAppendResponse> requestAppendResponse;
 
-    std::vector<LogType> log;
-    int commitIndex;
-    int lastAppliedIndex;
+        AllSend() : requestVote(nullptr), requestVoteResponse(nullptr),
+                    requestAppend(nullptr), requestAppendResponse(nullptr) {}
+    };
 
-    Status state;
+    enum Status {
+        FOLLOWER,
+        CANDIDATE,
+        LEADER,
+    };
 
-    /* 计时器，周期函数每次执行时会递增改值 */
-    int timeoutElapsed;
+    class Raft {
+    public:
+        int tick();
 
-    std::unordered_map<std::unique_ptr<Server>> nodes;
-    std::vector<int> nodeApplied;
-    std::vector<int> nodeCommited;
+        // 状态改变
+        int becomeLeader();
 
-    int electionTimeout;
-    int requestTimeout;
+        int becomeFollower();
 
-    int  currentLeader;
-};
+        int becomeFollower(int term, int voteFor);
+
+        int becomeCandidate();
+
+        // 从网络中获取数据
+        int send(std::shared_ptr<AllSend>);
+
+        std::shared_ptr<AllSend> recvFromNet();
+
+        int recv();
+
+        // 处理数据
+        int handleRequestVote(std::shared_ptr<RequestVote>);
+
+        int handleRequestVoteResponse(std::shared_ptr<RequestVoteResponse>);
+
+        int handleRequestAppend(std::shared_ptr<RequestAppend>);
+
+        int handleRequestAppendResponse(std::shared_ptr<RequestAppendResponse>);
+
+    private:
+        int id;
+        int term;
+        int votedFor;
+        int voteCount;
+
+        std::vector<RaftLog> log;
+        int commitIndex;
+        int lastAppliedIndex;
+
+        Status state;
+
+        int heartBeatTick;
+        int electionTick;
+
+        std::unordered_map<int, std::unique_ptr<Server>> nodes;
+
+        int electionTimeout;
+        int heartBeatTimeout;
+
+        int currentLeader;
+    };
 
 
 } // namespace ToyRaft
