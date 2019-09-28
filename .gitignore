@@ -103,5 +103,7 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-# Pycharm
+# idea
 .idea/
+build/
+cmake-build-debug/
