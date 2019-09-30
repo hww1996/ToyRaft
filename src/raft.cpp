@@ -47,7 +47,7 @@ namespace ToyRaft {
 
         return ret;
     }
-
+    // 接收到投票请求
     int Raft::handleRequestVote(std::shared_ptr<ToyRaft::RequestVote> requestVote) {
         int ret = 0;
         if (nullptr == requestVote) {
@@ -63,20 +63,20 @@ namespace ToyRaft {
         }
             // 假设他的任期更大，那么比较日志那个更新
         else {
-            const RaftLog &lastLog = log.back();
-            // 首先比较的是最后应用的日志的任期
-            // 投票请求的最后应用的日志的任期小于当前日志的最后任期
+            const RaftLog &lastCommit = log[commitIndex];
+            // 首先比较的是最后提交的日志的任期
+            // 投票请求的最后提交的日志的任期小于当前日志的最后任期
             // 那么不投票给他
-            if (lastLog.term > requestVote->lastLogTerm) {
+            if (lastCommit.term > requestVote->lastLogTerm) {
                 voteRspMsg->term = term;
                 voteRspMsg->voteForMe = false;
             }
-                // 投票请求的最后应用的日志的任期等于当前日志的最后任期
-                // 那么比较应用到状态机的日志index
-            else if (lastLog.term == requestVote->lastLogTerm) {
+            // 投票请求的最后提交的日志的任期等于当前日志的最后任期
+            // 那么比较应用到状态机的日志index
+            else if (lastCommit.term == requestVote->lastLogTerm) {
                 // 假如当前应用到状态机的index比投票请求的大
                 // 那么不投票给他
-                if (lastAppliedIndex > requestVote->lastAppliedLogIndex) {
+                if (commitIndex > requestVote->lastCommitLogIndex) {
                     voteRspMsg->term = requestVote->term;
                     voteRspMsg->voteForMe = false;
                 } else {
@@ -90,10 +90,12 @@ namespace ToyRaft {
             }
         }
         std::shared_ptr<AllSend> requestVoteRsp = std::shared_ptr<AllSend>(new AllSend());
+        requestVoteRsp->sendType = VOTERSP;
+        requestVoteRsp->requestVoteResponse = voteRspMsg;
         ret = send(requestVoteRsp);
         return ret;
     }
-
+    // 接收到请求投票的response
     int Raft::handleRequestVoteResponse(std::shared_ptr<ToyRaft::RequestVoteResponse> requestVoteResponse) {
         int ret = 0;
         if (CANDIDATE != state) {
@@ -106,6 +108,69 @@ namespace ToyRaft {
         if (voteCount > (nodes.size() / 2 + 1)) {
             becomeLeader();
         }
+        return ret;
+    }
+
+    int Raft::handleRequestAppend(std::shared_ptr<ToyRaft::RequestAppend> requestAppend) {
+        int ret = 0;
+        std::shared_ptr<ToyRaft::RequestAppendResponse> appendRsp =
+                std::shared_ptr<ToyRaft::RequestAppendResponse>(new ToyRaft::RequestAppendResponse);
+
+        // 当term小于或者等于requestAppend的term的时候，那么直接成为follower,并处理appendLog请求
+        if(term <= requestAppend->term){
+            becomeFollower(requestAppend->term, requestAppend->currentLeaderId);
+            // 当前的commitIndex小于preLogIndex，那么直接返回错误
+            if(commitIndex < requestAppend->preLogIndex){
+                appendRsp->term = term;
+                appendRsp->success = false;
+            }
+            else {
+                std::vector<RaftLog> &appendEntries = requestAppend->entries;
+                bool isMatch = false;
+                // 判断是否匹配上
+                // requestAppend->preLogIndex 为-1 一定是匹配上的
+                if(-1 == requestAppend->preLogIndex) {
+                    isMatch = true;
+                }
+                    // 任期一致，也匹配上
+                else{
+                    const RaftLog &preLog = log[requestAppend->preLogIndex];
+                    if(requestAppend->preLogTerm == preLog.term){
+                        isMatch = true;
+                    }
+                }
+                if(isMatch){
+                    int LogIndex = requestAppend->preLogIndex + 1;
+                    int entriesIndex = 0;
+                    while(LogIndex < log.size() &&
+                          entriesIndex < appendEntries.size()
+                            ){
+                        log[LogIndex++] = appendEntries[entriesIndex++];
+                    }
+                    while(entriesIndex < appendEntries.size()){
+                        log.push_back(appendEntries[entriesIndex++]);
+                        LogIndex++;
+                    }
+                    commitIndex = LogIndex - 1;
+                    appendRsp->term = term;
+                    appendRsp->success = true;
+                }
+                else{
+                    appendRsp->term = term;
+                    appendRsp->success = false;
+                }
+            }
+        }
+        // 当前的term大于requestAppend的term，
+        // 那么说明这个leader是过期的，直接返回false，并告诉他出现异常
+        else{
+            appendRsp->term = term;
+            appendRsp->success = false;
+        }
+        std::shared_ptr<AllSend> requestAppendRsp = std::shared_ptr<AllSend>(new AllSend());
+        requestAppendRsp->sendType = APPENDRSP;
+        requestAppendRsp->requestAppendResponse = appendRsp;
+        ret = send(requestAppendRsp);
         return ret;
     }
 
