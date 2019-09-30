@@ -19,7 +19,7 @@ namespace ToyRaft {
         int term;
         int candidateId;
         int lastLogTerm;
-        int lastAppliedLogIndex;
+        int lastCommitLogIndex;
     };
 
     struct RequestVoteResponse {
@@ -40,7 +40,7 @@ namespace ToyRaft {
 
     struct RequestAppend {
         int term;
-        int id;
+        int currentLeaderId;
         int preLogTerm;
         int preLogIndex;
         int leaderCommit;
@@ -50,8 +50,6 @@ namespace ToyRaft {
     struct RequestAppendResponse {
         int term;
         bool success;
-        int currentIndex;
-        int firstAppliedIndex;
     };
 
     struct AllSend {
@@ -115,7 +113,9 @@ namespace ToyRaft {
         int heartBeatTick;
         int electionTick;
 
-        std::unordered_map<int, std::unique_ptr<Server>> nodes;
+        std::unordered_map<int, std::unique_ptr<ToyRaft::Raft>> nodes;
+        nextIndex;
+        matchIndex;
 
         int electionTimeout;
         int heartBeatTimeout;
