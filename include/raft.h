@@ -49,6 +49,8 @@ namespace ToyRaft {
 
     struct RequestAppendResponse {
         int term;
+        int sentBackId;
+        int commitIndex;
         bool success;
     };
 
@@ -113,7 +115,7 @@ namespace ToyRaft {
         int heartBeatTick;
         int electionTick;
 
-        std::unordered_map<int, std::unique_ptr<ToyRaft::Raft>> nodes;
+        std::unordered_map<int, std::shared_ptr<ToyRaft::Raft>> nodes;
         nextIndex;
         matchIndex;
 
