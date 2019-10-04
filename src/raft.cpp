@@ -56,51 +56,46 @@ namespace ToyRaft {
      * @param requestVote
      * @return 错误码
      */
-    int Raft::handleRequestVote(std::shared_ptr<ToyRaft::RequestVote> requestVote) {
+    int Raft::handleRequestVote(::ToyRaft::RequestVote& requestVote) {
         int ret = 0;
-        if (nullptr == requestVote) {
-            return ret;
-        }
-        auto voteRspMsg = std::shared_ptr<RequestVoteResponse>(
-                new RequestVoteResponse
-        );
+        ::ToyRaft::RequestVoteResponse voteRspMsg;
         // 以前的任期已经投过票了，所以不投给他
-        if (term >= requestVote->term) {
-            voteRspMsg->term = term;
-            voteRspMsg->voteForMe = false;
+        if (term >= requestVote.term()) {
+            voteRspMsg.set_term(term);
+            voteRspMsg.set_voteforme(false);
         }
             // 假设他的任期更大，那么比较日志那个更新
         else {
-            const RaftLog &lastCommit = log[commitIndex];
+            const ::ToyRaft::RaftLog &lastCommit = log[commitIndex];
             // 首先比较的是最后提交的日志的任期
             // 投票请求的最后提交的日志的任期小于当前日志的最后任期
             // 那么不投票给他
-            if (lastCommit.term > requestVote->lastLogTerm) {
-                voteRspMsg->term = term;
-                voteRspMsg->voteForMe = false;
+            if (lastCommit.term() > requestVote.lastlogterm()) {
+                voteRspMsg.set_term(term);
+                voteRspMsg.set_voteforme(false);
             }
                 // 投票请求的最后提交的日志的任期等于当前日志的最后任期
                 // 那么比较应用到状态机的日志index
-            else if (lastCommit.term == requestVote->lastLogTerm) {
+            else if (lastCommit.term() == requestVote.lastlogterm()) {
                 // 假如当前应用到状态机的index比投票请求的大
                 // 那么不投票给他
-                if (commitIndex > requestVote->lastCommitLogIndex) {
-                    voteRspMsg->term = requestVote->term;
-                    voteRspMsg->voteForMe = false;
+                if (commitIndex > requestVote.lastcommitlogindex()) {
+                    voteRspMsg.set_term(term);
+                    voteRspMsg.set_voteforme(false);
                 } else {
                     // 投票给候选者，并把自己的状态变为follower，
                     // 设置当前任期和投票给的人
-                    becomeFollower(requestVote->term,
-                                   requestVote->candidateId);
-                    voteRspMsg->term = requestVote->term;
-                    voteRspMsg->voteForMe = true;
+                    becomeFollower(requestVote.term(),
+                                   requestVote.candidateid());
+                    voteRspMsg.set_term(term);
+                    voteRspMsg.set_voteforme(true);
                 }
             }
         }
-        std::shared_ptr<AllSend> requestVoteRsp = std::shared_ptr<AllSend>(new AllSend());
-        requestVoteRsp->sendType = SendType::VOTERSP;
-        requestVoteRsp->requestVoteResponse = voteRspMsg;
-        ret = send(requestVoteRsp);
+        ::ToyRaft::AllSend requestVoteRsp;
+        requestVoteRsp.set_sendtype(::ToyRaft::AllSend::VOTERSP);
+        requestVoteRsp.set_allocated_requestvoteresponse(&voteRspMsg);
+        // ret = send(requestVoteRsp);
         return ret;
     }
 

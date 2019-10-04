@@ -26,8 +26,6 @@ namespace ToyRaft {
 
         int recv();
 
-
-
     private:
         // 构造vote请求
         std::shared_ptr<AllSend> constructRequestVote();
@@ -58,7 +56,7 @@ namespace ToyRaft {
         int64_t votedFor;
         int64_t voteCount;
 
-        std::vector<RaftLog> log;
+        std::vector<::ToyRaft::RaftLog> log;
         int64_t commitIndex;
         int64_t lastAppliedIndex;
 
