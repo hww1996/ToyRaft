@@ -56,7 +56,7 @@ namespace ToyRaft {
      * @param requestVote
      * @return 错误码
      */
-    int Raft::handleRequestVote(::ToyRaft::RequestVote& requestVote) {
+    int Raft::handleRequestVote(const ::ToyRaft::RequestVote& requestVote) {
         int ret = 0;
         ::ToyRaft::RequestVoteResponse voteRspMsg;
         // 以前的任期已经投过票了，所以不投给他
@@ -113,7 +113,7 @@ namespace ToyRaft {
      * @param requestVoteResponse
      * @return
      */
-    int Raft::handleRequestVoteResponse(::ToyRaft::RequestVoteResponse& requestVoteResponse) {
+    int Raft::handleRequestVoteResponse(const ::ToyRaft::RequestVoteResponse& requestVoteResponse) {
         int ret = 0;
         if (Status::CANDIDATE != state) {
             return 0;
@@ -133,7 +133,7 @@ namespace ToyRaft {
      * @param requestAppend
      * @return
      */
-    int Raft::handleRequestAppend(::ToyRaft::RequestAppend& requestAppend) {
+    int Raft::handleRequestAppend(const ::ToyRaft::RequestAppend& requestAppend) {
         int ret = 0;
         ::ToyRaft::RequestAppendResponse appendRsp;
 
@@ -203,7 +203,7 @@ namespace ToyRaft {
      * @param requestAppendResponse
      * @return
      */
-    int Raft::handleRequestAppendResponse(::ToyRaft::RequestAppendResponse& requestAppendResponse) {
+    int Raft::handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse& requestAppendResponse) {
         int ret = 0;
         if (Status::LEADER == state) {
             if (nodes.end() == nodes.find(requestAppendResponse.sentbackid())) {
