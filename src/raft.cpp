@@ -255,22 +255,23 @@ namespace ToyRaft {
     int Raft::recv() {
         int ret = 0;
         while (true) {
-            std::shared_ptr<AllSend> allSend = recvFromNet();
-            if (nullptr == allSend) {
+            ::ToyRaft::AllSend allSend;
+            ret = recvFromNet(allSend);
+            if (0 >= ret) {
                 break;
             }
-            switch (allSend->sendType) {
-                case SendType::REQVOTE:
-                    ret = handleRequestVote(allSend->requestVote);
+            switch (allSend.sendtype()) {
+                case ::ToyRaft::AllSend::REQVOTE:
+                    ret = handleRequestVote(allSend.requestvote());
                     break;
-                case SendType::VOTERSP:
-                    ret = handleRequestVoteResponse(allSend->requestVoteResponse);
+                case ::ToyRaft::AllSend::VOTERSP:
+                    ret = handleRequestVoteResponse(allSend.requestvoteresponse());
                     break;
-                case SendType::REQAPPEND:
-                    ret = handleRequestAppend(allSend->requestAppend);
+                case ::ToyRaft::AllSend::REQAPPEND:
+                    ret = handleRequestAppend(allSend.requestappend());
                     break;
-                case SendType::APPENDRSP:
-                    ret = handleRequestAppendResponse(allSend->requestAppendResponse);
+                case ::ToyRaft::AllSend::APPENDRSP:
+                    ret = handleRequestAppendResponse(allSend.requestappendresponse());
                     break;
                 default:
                     break;

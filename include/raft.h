@@ -43,13 +43,13 @@ namespace ToyRaft {
         int becomeCandidate();
 
         // 处理数据
-        int handleRequestVote(::ToyRaft::RequestVote&);
+        int handleRequestVote(const ::ToyRaft::RequestVote&);
 
-        int handleRequestVoteResponse(::ToyRaft::RequestVoteResponse&);
+        int handleRequestVoteResponse(const ::ToyRaft::RequestVoteResponse&);
 
-        int handleRequestAppend(::ToyRaft::RequestAppend&);
+        int handleRequestAppend(const ::ToyRaft::RequestAppend&);
 
-        int handleRequestAppendResponse(::ToyRaft::RequestAppendResponse&);
+        int handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse&);
 
         int64_t id;
         int64_t term;
