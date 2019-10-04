@@ -75,6 +75,22 @@ namespace ToyRaft {
     public:
         int tick();
 
+        // 从网络中获取数据
+        int send(std::shared_ptr<AllSend>);
+
+        std::shared_ptr<AllSend> recvFromNet();
+
+        int recv();
+
+
+
+    private:
+        // 构造vote请求
+        std::shared_ptr<AllSend> constructRequestVote();
+
+        // 构造append请求
+        std::shared_ptr<AllSend> constructRequestAppend();
+
         // 状态改变
         int becomeLeader();
 
@@ -83,13 +99,6 @@ namespace ToyRaft {
         int becomeFollower(int term, int voteFor);
 
         int becomeCandidate();
-
-        // 从网络中获取数据
-        int send(std::shared_ptr<AllSend>);
-
-        std::shared_ptr<AllSend> recvFromNet();
-
-        int recv();
 
         // 处理数据
         int handleRequestVote(std::shared_ptr<RequestVote>);
@@ -100,7 +109,6 @@ namespace ToyRaft {
 
         int handleRequestAppendResponse(std::shared_ptr<RequestAppendResponse>);
 
-    private:
         int id;
         int term;
         int votedFor;
@@ -116,8 +124,8 @@ namespace ToyRaft {
         int electionTick;
 
         std::unordered_map<int, std::shared_ptr<ToyRaft::Raft>> nodes;
-        nextIndex;
-        matchIndex;
+        int nextIndex;
+        int matchIndex;
 
         int electionTimeout;
         int heartBeatTimeout;

@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package ToyRaft;
+
+message RequestVote {
+    int64 term = 1;
+    int64 candidateId = 2;
+    int64 lastLogTerm = 3;
+    int64 lastCommitLogIndex = 4;
+}
+
+message RequestVoteResponse {
+    int64 term = 1;
+    bool voteForMe = 2;
+}
+
+message RaftLog {
+    int64 term = 1;
+    enum LogType {
+        APPEND = 0;
+    }
+    LogType type = 2;
+    bytes buf = 3;
+}
+
+message RequestAppend {
+    int64 term = 1;
+    int64 currentLeaderId = 2;
+    int64 preLogTerm = 3;
+    int64 preLogIndex = 4;
+    int64 leaderCommit = 5;
+    repeated RaftLog entries =6;
+}
+
+message RequestAppendResponse {
+    int64 term = 1;
+    int64 sentBackId = 2;
+    int64 commitIndex = 3;
+    bool success = 4;
+}
+
+message AllSend {
+    enum SendType {
+        REQVOTE = 0;
+        VOTERSP = 1;
+        REQAPPEND = 2;
+        APPENDRSP = 3;
+    }
+    SendType sendType = 1;
+    RequestVote requestVote = 2;
+    RequestVoteResponse requestVoteResponse = 3;
+    RequestAppend requestAppend = 4;
+    RequestAppendResponse requestAppendResponse = 5;
+}

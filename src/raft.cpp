@@ -46,6 +46,11 @@ namespace ToyRaft {
         return ret;
     }
 
+    std::shared_ptr<AllSend> constructRequestVote() {
+        std::shared_ptr<AllSend> requestVote(new AllSend);
+        return requestVote;
+    }
+
     /**
      * @brief 接收到投票请求
      * @param requestVote
@@ -113,7 +118,7 @@ namespace ToyRaft {
             requestVoteResponse->voteForMe) {
             voteCount++;
         }
-        if (voteCount > (nodes.size() / 2 + 1)) {
+        if (voteCount >= (nodes.size() / 2 + 1)) {
             becomeLeader();
         }
         return ret;
@@ -198,21 +203,38 @@ namespace ToyRaft {
     int Raft::handleRequestAppendResponse(std::shared_ptr<ToyRaft::RequestAppendResponse> requestAppendResponse) {
         int ret = 0;
         if (Status::LEADER == state) {
-            if(nodes.end() == nodes.find(requestAppendResponse->sentBackId)){
+            if (nodes.end() == nodes.find(requestAppendResponse->sentBackId)) {
                 ret = -1;
-            }
-            else{
+            } else {
                 auto node = nodes[requestAppendResponse->sentBackId];
-                if(requestAppendResponse->success){
+                if (requestAppendResponse->success) {
                     node->matchIndex = requestAppendResponse->commitIndex;
-                    node->nextIndex = node->matchIndex+1;
-                }else{
-                    if(0 != node->nextIndex){
+                    node->nextIndex = node->matchIndex + 1;
+                } else {
+                    if (0 != node->nextIndex) {
                         node->nextIndex--;
                     }
                 }
             }
-
+            // 查找需要提交的commit
+            std::unordered_map<int, int> commitCount;
+            int allFollowerCount = nodes.size() - 1;
+            bool findCommit = false;
+            int needCommitIndex = -1;
+            for (const auto &follower : nodes) {
+                int nowFollowerCommit = follower.second->commitIndex;
+                if (commitCount.end() == commitCount.find(nowFollowerCommit)) {
+                    commitCount[nowFollowerCommit] = 0;
+                }
+                commitCount[nowFollowerCommit]++;
+                if (commitCount[nowFollowerCommit] >= (allFollowerCount / 2 + 1)) {
+                    findCommit = true;
+                    needCommitIndex = nowFollowerCommit;
+                }
+            }
+            if (findCommit) {
+                commitIndex = needCommitIndex;
+            }
         }
         return ret;
     }
@@ -250,9 +272,7 @@ namespace ToyRaft {
                 default:
                     break;
             }
-
         }
-
         return ret;
     }
 } // namespace ToyRaft
