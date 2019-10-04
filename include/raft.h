@@ -4,67 +4,11 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include "raft.pb.h"
 
 #ifndef TOYRAFT_RAFT_H
 
 namespace ToyRaft {
-    enum SendType {
-        REQVOTE,
-        VOTERSP,
-        REQAPPEND,
-        APPENDRSP,
-    };
-
-    struct RequestVote {
-        int term;
-        int candidateId;
-        int lastLogTerm;
-        int lastCommitLogIndex;
-    };
-
-    struct RequestVoteResponse {
-        int term;
-        bool voteForMe;
-    };
-
-    enum LogType {
-        APPEND
-    };
-
-    struct RaftLog {
-        int term;
-        LogType type;
-        char *buf;
-        int len;
-    };
-
-    struct RequestAppend {
-        int term;
-        int currentLeaderId;
-        int preLogTerm;
-        int preLogIndex;
-        int leaderCommit;
-        std::vector<RaftLog> entries;
-    };
-
-    struct RequestAppendResponse {
-        int term;
-        int sentBackId;
-        int commitIndex;
-        bool success;
-    };
-
-    struct AllSend {
-        SendType sendType;
-        std::shared_ptr<RequestVote> requestVote;
-        std::shared_ptr<RequestVoteResponse> requestVoteResponse;
-        std::shared_ptr<RequestAppend> requestAppend;
-        std::shared_ptr<RequestAppendResponse> requestAppendResponse;
-
-        AllSend() : requestVote(nullptr), requestVoteResponse(nullptr),
-                    requestAppend(nullptr), requestAppendResponse(nullptr) {}
-    };
-
     enum Status {
         FOLLOWER,
         CANDIDATE,
@@ -75,54 +19,58 @@ namespace ToyRaft {
     public:
         int tick();
 
+        // 从网络中获取数据
+        int send(std::shared_ptr<AllSend>);
+
+        int recvFromNet(::ToyRaft::AllSend &);
+
+        int recv();
+
+    private:
+        // 构造vote请求
+        std::shared_ptr<AllSend> constructRequestVote();
+
+        // 构造append请求
+        std::shared_ptr<AllSend> constructRequestAppend();
+
         // 状态改变
         int becomeLeader();
 
         int becomeFollower();
 
-        int becomeFollower(int term, int voteFor);
+        int becomeFollower(int64_t term, int64_t voteFor);
 
         int becomeCandidate();
 
-        // 从网络中获取数据
-        int send(std::shared_ptr<AllSend>);
-
-        std::shared_ptr<AllSend> recvFromNet();
-
-        int recv();
-
         // 处理数据
-        int handleRequestVote(std::shared_ptr<RequestVote>);
+        int handleRequestVote(const ::ToyRaft::RequestVote&);
 
-        int handleRequestVoteResponse(std::shared_ptr<RequestVoteResponse>);
+        int handleRequestVoteResponse(const ::ToyRaft::RequestVoteResponse&);
 
-        int handleRequestAppend(std::shared_ptr<RequestAppend>);
+        int handleRequestAppend(const ::ToyRaft::RequestAppend&);
 
-        int handleRequestAppendResponse(std::shared_ptr<RequestAppendResponse>);
+        int handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse&);
 
-    private:
-        int id;
-        int term;
-        int votedFor;
-        int voteCount;
+        int64_t id;
+        int64_t term;
+        int64_t votedFor;
+        int64_t voteCount;
 
-        std::vector<RaftLog> log;
-        int commitIndex;
-        int lastAppliedIndex;
+        std::vector<::ToyRaft::RaftLog> log;
+        int64_t commitIndex;
+        int64_t lastAppliedIndex;
 
         Status state;
 
         int heartBeatTick;
         int electionTick;
 
-        std::unordered_map<int, std::shared_ptr<ToyRaft::Raft>> nodes;
-        nextIndex;
-        matchIndex;
+        std::unordered_map<int64_t, std::shared_ptr<ToyRaft::Raft>> nodes;
+        int64_t nextIndex;
+        int64_t matchIndex;
 
         int electionTimeout;
         int heartBeatTimeout;
-
-        int currentLeader;
     };
 
 
