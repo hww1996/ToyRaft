@@ -31,6 +31,20 @@ namespace ToyRaft {
         // 发送append请求
         int sendRequestAppend();
 
+        // 从网络中获取数据
+        int send(std::shared_ptr<AllSend>);
+
+        int recvFromNet(::ToyRaft::AllSend &);
+
+        int recv();
+
+    private:
+        // 构造vote请求
+        std::shared_ptr<AllSend> constructRequestVote();
+
+        // 构造append请求
+        std::shared_ptr<AllSend> constructRequestAppend();
+
         // 状态改变
         int becomeLeader();
 

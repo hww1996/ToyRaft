@@ -51,6 +51,11 @@ namespace ToyRaft {
         return ret;
     }
 
+    std::shared_ptr<AllSend> constructRequestVote() {
+        std::shared_ptr<AllSend> requestVote(new AllSend);
+        return requestVote;
+    }
+
     /**
      * @brief 请求投票
      * @return
