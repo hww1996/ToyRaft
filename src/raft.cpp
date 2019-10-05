@@ -5,6 +5,10 @@
 #include "raft.h"
 
 namespace ToyRaft {
+    static int64_t min(int64_t a, int64_t b) {
+        return a > b ? b : a;
+    }
+
     /**
      * @brief 只有leader和candidate有权限发送，每个角色都有权限接收
      * @return 返回错误码
@@ -31,14 +35,15 @@ namespace ToyRaft {
 
         if (Status::LEADER == state) {
             if (heartBeatTick >= heartBeatTimeout) {
-                //ret = send();
-                if (ret != 0) {
+                commit();
+                ret = sendRequestAppend();
+                if (0 != ret) {
                     return ret;
                 }
             }
         } else if (Status::CANDIDATE == state) {
-            //ret = send();
-            if (ret != 0) {
+            ret = sendRequestVote();
+            if (0 != ret) {
                 return ret;
             }
         }
@@ -52,11 +57,76 @@ namespace ToyRaft {
     }
 
     /**
+     * @brief 请求投票
+     * @return
+     */
+    int Raft::sendRequestVote() {
+        int ret = 0;
+        if (Status::CANDIDATE == state) {
+            ::ToyRaft::RequestVote requestVote;
+            requestVote.set_term(term);
+            requestVote.set_candidateid(id);
+            requestVote.set_lastcommitlogindex(commitIndex);
+            requestVote.set_lastlogterm(log[commitIndex].term());
+            for (auto nodeIter = nodes.begin(); nodes.end() != nodeIter; ++nodeIter) {
+                if (nodeIter->second->id != id) {
+                    ::ToyRaft::AllSend allSend;
+                    allSend.set_sendtype(::ToyRaft::AllSend::REQVOTE);
+                    allSend.set_allocated_requestvote(&requestVote);
+                    ret = sendToNet(nodeIter->second->id, allSend);
+                }
+                if (0 != ret) {
+                    return ret;
+                }
+            }
+        } else {
+            return -1;
+        }
+        return ret;
+    }
+
+    int Raft::sendRequestAppend() {
+        int ret = 0;
+        if (Status::LEADER != state) {
+            return -1;
+        } else {
+            for (auto nodeIter = nodes.begin(); nodes.end() != nodeIter; ++nodeIter) {
+                if (nodeIter->second->id != id) {
+                    ::ToyRaft::RequestAppend requestAppend;
+                    for (int i = nodeIter->second->nextIndex; i < lastAppliedIndex; i++) {
+                        auto needAppendLog = requestAppend.add_entries();
+                        needAppendLog->set_term(term);
+                        needAppendLog->set_type(::ToyRaft::RaftLog::APPEND);
+                        needAppendLog->set_buf(log[i].buf());
+                    }
+                    requestAppend.set_term(term);
+                    requestAppend.set_currentleaderid(id);
+                    requestAppend.set_leadercommit(commitIndex);
+                    requestAppend.set_prelogindex(nodeIter->second->matchIndex);
+                    if (requestAppend.prelogindex() == -1) {
+                        requestAppend.set_prelogterm(-1);
+                    } else {
+                        requestAppend.set_prelogterm(log[nodeIter->second->matchIndex].term());
+                    }
+                    ::ToyRaft::AllSend allSend;
+                    allSend.set_sendtype(::ToyRaft::AllSend::REQAPPEND);
+                    allSend.set_allocated_requestappend(&requestAppend);
+                    ret = sendToNet(nodeIter->second->id, allSend);
+                }
+                if (0 != ret) {
+                    return ret;
+                }
+            }
+        }
+        return ret;
+    }
+
+    /**
      * @brief 接收到投票请求
      * @param requestVote
      * @return 错误码
      */
-    int Raft::handleRequestVote(const ::ToyRaft::RequestVote& requestVote) {
+    int Raft::handleRequestVote(const ::ToyRaft::RequestVote &requestVote) {
         int ret = 0;
         ::ToyRaft::RequestVoteResponse voteRspMsg;
         // 以前的任期已经投过票了，所以不投给他
@@ -85,18 +155,16 @@ namespace ToyRaft {
                 } else {
                     // 投票给候选者，并把自己的状态变为follower，
                     // 设置当前任期和投票给的人
-                    becomeFollower(requestVote.term(),
-                                   requestVote.candidateid());
+                    becomeFollower(requestVote.term(), requestVote.candidateid());
                     voteRspMsg.set_term(term);
                     voteRspMsg.set_voteforme(true);
                 }
             }
-            // 投票请求的最后提交的日志的大于等于当前日志的最后任期
-            else{
+                // 投票请求的最后提交的日志的大于等于当前日志的最后任期
+            else {
                 // 投票给候选者，并把自己的状态变为follower，
                 // 设置当前任期和投票给的人
-                becomeFollower(requestVote.term(),
-                               requestVote.candidateid());
+                becomeFollower(requestVote.term(), requestVote.candidateid());
                 voteRspMsg.set_term(term);
                 voteRspMsg.set_voteforme(true);
             }
@@ -104,7 +172,7 @@ namespace ToyRaft {
         ::ToyRaft::AllSend requestVoteRsp;
         requestVoteRsp.set_sendtype(::ToyRaft::AllSend::VOTERSP);
         requestVoteRsp.set_allocated_requestvoteresponse(&voteRspMsg);
-        // ret = send(requestVoteRsp);
+        ret = sendToNet(requestVote.candidateid(), requestVoteRsp);
         return ret;
     }
 
@@ -113,13 +181,12 @@ namespace ToyRaft {
      * @param requestVoteResponse
      * @return
      */
-    int Raft::handleRequestVoteResponse(const ::ToyRaft::RequestVoteResponse& requestVoteResponse) {
+    int Raft::handleRequestVoteResponse(const ::ToyRaft::RequestVoteResponse &requestVoteResponse) {
         int ret = 0;
         if (Status::CANDIDATE != state) {
             return 0;
         }
-        if (requestVoteResponse.term() == term &&
-            requestVoteResponse.voteforme()) {
+        if (requestVoteResponse.term() == term && requestVoteResponse.voteforme()) {
             voteCount++;
         }
         if (voteCount >= (nodes.size() / 2 + 1)) {
@@ -133,17 +200,17 @@ namespace ToyRaft {
      * @param requestAppend
      * @return
      */
-    int Raft::handleRequestAppend(const ::ToyRaft::RequestAppend& requestAppend) {
+    int Raft::handleRequestAppend(const ::ToyRaft::RequestAppend &requestAppend) {
         int ret = 0;
         ::ToyRaft::RequestAppendResponse appendRsp;
 
         // 当term小于或者等于requestAppend的term的时候，那么直接成为follower,并处理appendLog请求
         if (term <= requestAppend.term()) {
             becomeFollower(requestAppend.term(), requestAppend.currentleaderid());
-            // 当前的commitIndex小于preLogIndex，那么直接返回错误
-            if (commitIndex < requestAppend.prelogindex()) {
+            // 当前的lastAppliedIndex-1小于preLogIndex，那么直接返回错误
+            if (lastAppliedIndex - 1 < requestAppend.prelogindex()) {
                 appendRsp.set_term(term);
-                appendRsp.set_commitindex(-1);
+                appendRsp.set_appliedindex(lastAppliedIndex);
                 appendRsp.set_success(false);
             } else {
                 auto &appendEntries = requestAppend.entries();
@@ -163,22 +230,21 @@ namespace ToyRaft {
                 if (isMatch) {
                     int64_t LogIndex = requestAppend.prelogindex() + 1;
                     int entriesIndex = 0;
-                    while (LogIndex < log.size() &&
-                           entriesIndex < appendEntries.size()
-                            ) {
+                    while (LogIndex < log.size() && entriesIndex < appendEntries.size()) {
                         log[LogIndex++] = appendEntries[entriesIndex++];
                     }
                     while (entriesIndex < appendEntries.size()) {
                         log.push_back(appendEntries[entriesIndex++]);
                         LogIndex++;
                     }
-                    commitIndex = LogIndex - 1;
+                    lastAppliedIndex = LogIndex;
+                    commitIndex = min(requestAppend.leadercommit(), commitIndex);
                     appendRsp.set_term(term);
-                    appendRsp.set_commitindex(commitIndex);
+                    appendRsp.set_appliedindex(lastAppliedIndex);
                     appendRsp.set_success(true);
                 } else {
                     appendRsp.set_term(term);
-                    appendRsp.set_commitindex(-1);
+                    appendRsp.set_appliedindex(lastAppliedIndex);
                     appendRsp.set_success(false);
                 }
             }
@@ -187,14 +253,14 @@ namespace ToyRaft {
             // 那么说明这个leader是过期的，直接返回false，并告诉他出现异常
         else {
             appendRsp.set_term(term);
-            appendRsp.set_commitindex(-1);
+            appendRsp.set_appliedindex(lastAppliedIndex);
             appendRsp.set_success(false);
         }
         ::ToyRaft::AllSend requestAppendRsp;
         appendRsp.set_sentbackid(id);
         requestAppendRsp.set_sendtype(::ToyRaft::AllSend::APPENDRSP);
         requestAppendRsp.set_allocated_requestappendresponse(&appendRsp);
-        //ret = send(requestAppendRsp);
+        ret = sendToNet(requestAppend.currentleaderid(), requestAppendRsp);
         return ret;
     }
 
@@ -203,7 +269,7 @@ namespace ToyRaft {
      * @param requestAppendResponse
      * @return
      */
-    int Raft::handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse& requestAppendResponse) {
+    int Raft::handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse &requestAppendResponse) {
         int ret = 0;
         if (Status::LEADER == state) {
             if (nodes.end() == nodes.find(requestAppendResponse.sentbackid())) {
@@ -211,7 +277,7 @@ namespace ToyRaft {
             } else {
                 auto node = nodes[requestAppendResponse.sentbackid()];
                 if (requestAppendResponse.success()) {
-                    node->matchIndex = requestAppendResponse.commitindex();
+                    node->matchIndex = requestAppendResponse.appliedindex() - 1;
                     node->nextIndex = node->matchIndex + 1;
                 } else {
                     if (0 != node->nextIndex) {
@@ -219,25 +285,32 @@ namespace ToyRaft {
                     }
                 }
             }
-            // 查找需要提交的commit
-            std::unordered_map<int, int> commitCount;
-            int allFollowerCount = nodes.size() - 1;
-            bool findCommit = false;
-            int needCommitIndex = -1;
-            for (const auto &follower : nodes) {
-                int nowFollowerCommit = follower.second->commitIndex;
-                if (commitCount.end() == commitCount.find(nowFollowerCommit)) {
-                    commitCount[nowFollowerCommit] = 0;
-                }
-                commitCount[nowFollowerCommit]++;
-                if (commitCount[nowFollowerCommit] >= (allFollowerCount / 2 + 1)) {
-                    findCommit = true;
-                    needCommitIndex = nowFollowerCommit;
+        }
+        return ret;
+    }
+
+    /**
+     * @brief 提交还未提交的日志
+     * @return
+     */
+    int Raft::commit() {
+        int ret = 0;
+        std::vector<int> commitCount(lastAppliedIndex - commitIndex - 1, 0);
+        for (auto nodeIt = nodes.begin(); nodes.end() != nodeIt; ++nodeIt) {
+            if (-1 != nodeIt->second->matchIndex) {
+                for (int i = 0; i < nodeIt->second->matchIndex - commitIndex; i++) {
+                    commitCount[i]++;
                 }
             }
-            if (findCommit) {
-                commitIndex = needCommitIndex;
+        }
+        int i = commitCount.size() - 1;
+        for (; i >= 0; i--) {
+            if (nodes.size() / 2 <= commitCount[i]) {
+                break;
             }
+        }
+        if (i >= 0) {
+            commitIndex = commitIndex + i + 1;
         }
         return ret;
     }
