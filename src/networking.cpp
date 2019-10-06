@@ -32,11 +32,13 @@ namespace ToyRaft {
     int RaftNet::recvFromNet(::ToyRaft::AllSend *allSend) {
         int ret = 0;
         {
-            std::lock_guard<std::mutex> lock(sendMutex);
-            *allSend = recvBuf.front().buf_;
-            recvBuf.pop_front();
+            std::lock_guard<std::mutex> lock(recvMutex);
+            ret = recvBuf.size();
+            if (0 != ret) {
+                *allSend = recvBuf.front().buf_;
+                recvBuf.pop_front();
+            }
         }
         return ret;
     }
-
 } // namespace ToyRaft
