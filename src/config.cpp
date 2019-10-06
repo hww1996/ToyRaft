@@ -5,7 +5,6 @@
 #include <unistd.h>
 
 #include <rapidjson/document.h>
-#include <rapidjson>
 
 #include "config.h"
 
