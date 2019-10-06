@@ -6,7 +6,7 @@ message RequestVote {
     int64 term = 1;
     int64 candidateId = 2;
     int64 lastLogTerm = 3;
-    int64 lastCommitLogIndex = 4;
+    int64 lastLogIndex = 4;
 }
 
 message RequestVoteResponse {

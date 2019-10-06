@@ -113,3 +113,6 @@ cmake-build-debug/
 
 # protobuf
 *.pb.*
+
+# macos
+.DS_Store

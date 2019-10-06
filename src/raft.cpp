@@ -51,6 +51,17 @@ namespace ToyRaft {
         return ret;
     }
 
+    int Raft::becomeLeader() {
+        int ret = 0;
+        state = Status::LEADER;
+        for (auto nodeIt = nodes.begin(); nodes.end() != nodeIt; ++nodeIt) {
+            if (nodeIt->second->id != id) {
+
+            }
+        }
+        return ret;
+    }
+
     /**
      * @brief 请求投票
      * @return
@@ -61,8 +72,12 @@ namespace ToyRaft {
             ::ToyRaft::RequestVote requestVote;
             requestVote.set_term(term);
             requestVote.set_candidateid(id);
-            requestVote.set_lastcommitlogindex(commitIndex);
-            requestVote.set_lastlogterm(log[commitIndex].term());
+            requestVote.set_lastlogterm(lastAppliedIndex);
+            if (-1 == lastAppliedIndex) {
+                requestVote.set_lastlogterm(-1);
+            } else {
+                requestVote.set_lastlogterm(log[lastAppliedIndex].term());
+            }
             for (auto nodeIter = nodes.begin(); nodes.end() != nodeIter; ++nodeIter) {
                 if (nodeIter->second->id != id) {
                     ::ToyRaft::AllSend allSend;
@@ -80,6 +95,10 @@ namespace ToyRaft {
         return ret;
     }
 
+    /**
+     * @brief 请求复制log
+     * @return
+     */
     int Raft::sendRequestAppend() {
         int ret = 0;
         if (Status::LEADER != state) {
@@ -88,7 +107,7 @@ namespace ToyRaft {
             for (auto nodeIter = nodes.begin(); nodes.end() != nodeIter; ++nodeIter) {
                 if (nodeIter->second->id != id) {
                     ::ToyRaft::RequestAppend requestAppend;
-                    for (int i = nodeIter->second->nextIndex; i < lastAppliedIndex; i++) {
+                    for (int i = nodeIter->second->nextIndex; i <= lastAppliedIndex; i++) {
                         auto needAppendLog = requestAppend.add_entries();
                         needAppendLog->set_term(term);
                         needAppendLog->set_type(::ToyRaft::RaftLog::APPEND);
@@ -131,20 +150,20 @@ namespace ToyRaft {
         }
             // 假设他的任期更大，那么比较日志那个更新
         else {
-            const ::ToyRaft::RaftLog &lastCommit = log[commitIndex];
+            const ::ToyRaft::RaftLog &lastApplied = log[lastAppliedIndex];
             // 首先比较的是最后提交的日志的任期
             // 投票请求的最后提交的日志的任期小于当前日志的最后任期
             // 那么不投票给他
-            if (lastCommit.term() > requestVote.lastlogterm()) {
+            if (lastApplied.term() > requestVote.lastlogterm()) {
                 voteRspMsg.set_term(term);
                 voteRspMsg.set_voteforme(false);
             }
                 // 投票请求的最后提交的日志的任期等于当前日志的最后任期
                 // 那么比较应用到状态机的日志index
-            else if (lastCommit.term() == requestVote.lastlogterm()) {
+            else if (lastApplied.term() == requestVote.lastlogterm()) {
                 // 假如当前应用到状态机的index比投票请求的大
                 // 那么不投票给他
-                if (commitIndex > requestVote.lastcommitlogindex()) {
+                if (lastAppliedIndex > requestVote.lastlogindex()) {
                     voteRspMsg.set_term(term);
                     voteRspMsg.set_voteforme(false);
                 } else {
@@ -202,8 +221,8 @@ namespace ToyRaft {
         // 当term小于或者等于requestAppend的term的时候，那么直接成为follower,并处理appendLog请求
         if (term <= requestAppend.term()) {
             becomeFollower(requestAppend.term(), requestAppend.currentleaderid());
-            // 当前的lastAppliedIndex-1小于preLogIndex，那么直接返回错误
-            if (lastAppliedIndex - 1 < requestAppend.prelogindex()) {
+            // 当前的lastAppliedIndex小于preLogIndex，那么直接返回错误
+            if (lastAppliedIndex < requestAppend.prelogindex()) {
                 appendRsp.set_term(term);
                 appendRsp.set_appliedindex(lastAppliedIndex);
                 appendRsp.set_success(false);
@@ -232,7 +251,7 @@ namespace ToyRaft {
                         log.push_back(appendEntries[entriesIndex++]);
                         LogIndex++;
                     }
-                    lastAppliedIndex = LogIndex;
+                    lastAppliedIndex = LogIndex - 1;
                     commitIndex = min(requestAppend.leadercommit(), commitIndex);
                     appendRsp.set_term(term);
                     appendRsp.set_appliedindex(lastAppliedIndex);
@@ -272,7 +291,7 @@ namespace ToyRaft {
             } else {
                 auto node = nodes[requestAppendResponse.sentbackid()];
                 if (requestAppendResponse.success()) {
-                    node->matchIndex = requestAppendResponse.appliedindex() - 1;
+                    node->matchIndex = requestAppendResponse.appliedindex();
                     node->nextIndex = node->matchIndex + 1;
                 } else {
                     if (0 != node->nextIndex) {
@@ -290,17 +309,19 @@ namespace ToyRaft {
      */
     int Raft::commit() {
         int ret = 0;
-        std::vector<int> commitCount(lastAppliedIndex - commitIndex - 1, 0);
+        std::vector<int> commitCount(lastAppliedIndex - commitIndex, 1);
         for (auto nodeIt = nodes.begin(); nodes.end() != nodeIt; ++nodeIt) {
-            if (-1 != nodeIt->second->matchIndex) {
-                for (int i = 0; i < nodeIt->second->matchIndex - commitIndex; i++) {
-                    commitCount[i]++;
+            if (nodeIt->second->id != id) {
+                if (-1 != nodeIt->second->matchIndex) {
+                    for (int i = 0; i < nodeIt->second->matchIndex - commitIndex; i++) {
+                        commitCount[i]++;
+                    }
                 }
             }
         }
         int i = commitCount.size() - 1;
         for (; i >= 0; i--) {
-            if (nodes.size() / 2 <= commitCount[i]) {
+            if ((nodes.size() / 2 + 1) <= commitCount[i]) {
                 break;
             }
         }

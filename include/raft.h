@@ -55,7 +55,7 @@ namespace ToyRaft {
         // 任期相关
         int64_t id;
         int64_t term;
-        int64_t votedFor;
+        int64_t leaderId;
         int64_t voteCount;
 
         std::vector<::ToyRaft::RaftLog> log;
