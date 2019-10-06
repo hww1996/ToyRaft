@@ -6,6 +6,7 @@
 #include <ctime>
 
 #include "raft.h"
+#include "networking.h"
 
 namespace ToyRaft {
     static int64_t min(int64_t a, int64_t b) {
@@ -116,7 +117,7 @@ namespace ToyRaft {
                     ::ToyRaft::AllSend allSend;
                     allSend.set_sendtype(::ToyRaft::AllSend::REQVOTE);
                     allSend.set_allocated_requestvote(&requestVote);
-                    ret = sendToNet(nodeIter->second->id, allSend);
+                    ret = RaftNet::sendToNet(nodeIter->second->id, allSend);
                 }
                 if (0 != ret) {
                     return ret;
@@ -158,7 +159,7 @@ namespace ToyRaft {
                     ::ToyRaft::AllSend allSend;
                     allSend.set_sendtype(::ToyRaft::AllSend::REQAPPEND);
                     allSend.set_allocated_requestappend(&requestAppend);
-                    ret = sendToNet(nodeIter->second->id, allSend);
+                    ret = RaftNet::sendToNet(nodeIter->second->id, allSend);
                 }
                 if (0 != ret) {
                     return ret;
@@ -219,7 +220,7 @@ namespace ToyRaft {
         ::ToyRaft::AllSend requestVoteRsp;
         requestVoteRsp.set_sendtype(::ToyRaft::AllSend::VOTERSP);
         requestVoteRsp.set_allocated_requestvoteresponse(&voteRspMsg);
-        ret = sendToNet(requestVote.candidateid(), requestVoteRsp);
+        ret = RaftNet::sendToNet(requestVote.candidateid(), requestVoteRsp);
         return ret;
     }
 
@@ -307,7 +308,7 @@ namespace ToyRaft {
         appendRsp.set_sentbackid(id);
         requestAppendRsp.set_sendtype(::ToyRaft::AllSend::APPENDRSP);
         requestAppendRsp.set_allocated_requestappendresponse(&appendRsp);
-        ret = sendToNet(requestAppend.currentleaderid(), requestAppendRsp);
+        ret = RaftNet::sendToNet(requestAppend.currentleaderid(), requestAppendRsp);
         return ret;
     }
 
@@ -378,7 +379,7 @@ namespace ToyRaft {
         int ret = 0;
         while (true) {
             ::ToyRaft::AllSend allSend;
-            ret = recvFromNet(allSend);
+            ret = RaftNet::recvFromNet(allSend);
             if (0 >= ret) {
                 break;
             }

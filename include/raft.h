@@ -7,6 +7,7 @@
 #include "raft.pb.h"
 
 #ifndef TOYRAFT_RAFT_H
+#define TOYRAFT_RAFT_H
 
 namespace ToyRaft {
     enum Status {
@@ -17,14 +18,9 @@ namespace ToyRaft {
     public:
         int tick();
 
-        // 从网络中获取数据
-        int sendToNet(int64_t, ::ToyRaft::AllSend &);
-
-        int recvFromNet(::ToyRaft::AllSend &);
-
+    private:
         int recv();
 
-    private:
         // 发送vote请求
         int sendRequestVote();
 
@@ -75,7 +71,5 @@ namespace ToyRaft {
 
 
 } // namespace ToyRaft
-
-#define TOYRAFT_RAFT_H
 
 #endif //TOYRAFT_RAFT_H
