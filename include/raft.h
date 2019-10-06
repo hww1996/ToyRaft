@@ -34,9 +34,7 @@ namespace ToyRaft {
         // 状态改变
         int becomeLeader();
 
-        int becomeFollower();
-
-        int becomeFollower(int64_t term, int64_t voteFor);
+        int becomeFollower(int64_t term, int64_t leaderId);
 
         int becomeCandidate();
 
@@ -54,8 +52,8 @@ namespace ToyRaft {
 
         // 任期相关
         int64_t id;
-        int64_t term;
-        int64_t leaderId;
+        int64_t currentTerm;
+        int64_t currentLeaderId;
         int64_t voteCount;
 
         std::vector<::ToyRaft::RaftLog> log;

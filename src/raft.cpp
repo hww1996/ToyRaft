@@ -2,6 +2,9 @@
 // Created by hww1996 on 2019/9/28.
 //
 
+#include <cstdlib>
+#include <ctime>
+
 #include "raft.h"
 
 namespace ToyRaft {
@@ -53,12 +56,42 @@ namespace ToyRaft {
 
     int Raft::becomeLeader() {
         int ret = 0;
-        state = Status::LEADER;
-        for (auto nodeIt = nodes.begin(); nodes.end() != nodeIt; ++nodeIt) {
-            if (nodeIt->second->id != id) {
-
+        if (Status::CANDIDATE == state) {
+            state = Status::LEADER;
+            for (auto nodeIt = nodes.begin(); nodes.end() != nodeIt; ++nodeIt) {
+                if (nodeIt->second->id != id) {
+                    nodeIt->second->matchIndex = -1;
+                    nodeIt->second->nextIndex = lastAppliedIndex + 1;
+                }
             }
+            ret = sendRequestAppend();
         }
+        return ret;
+    }
+
+    int Raft::becomeCandidate() {
+        int ret = 0;
+        currentTerm++;
+
+        state = Status::CANDIDATE;
+
+        currentLeaderId = id;
+
+        voteCount = 1;
+
+        time_t seed = time(NULL);
+        srand(static_cast<unsigned int>(seed));
+        int64_t standerElectionTimeOut = heartBeatTimeout * 10;
+        electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
+        ret = sendRequestVote();
+        return ret;
+    }
+
+    int Raft::becomeFollower(int64_t term, int64_t leaderId) {
+        int ret = 0;
+        state = Status::FOLLOWER;
+        currentLeaderId = leaderId;
+        currentTerm = term;
         return ret;
     }
 
@@ -70,7 +103,7 @@ namespace ToyRaft {
         int ret = 0;
         if (Status::CANDIDATE == state) {
             ::ToyRaft::RequestVote requestVote;
-            requestVote.set_term(term);
+            requestVote.set_term(currentTerm);
             requestVote.set_candidateid(id);
             requestVote.set_lastlogterm(lastAppliedIndex);
             if (-1 == lastAppliedIndex) {
@@ -109,11 +142,11 @@ namespace ToyRaft {
                     ::ToyRaft::RequestAppend requestAppend;
                     for (int i = nodeIter->second->nextIndex; i <= lastAppliedIndex; i++) {
                         auto needAppendLog = requestAppend.add_entries();
-                        needAppendLog->set_term(term);
+                        needAppendLog->set_term(currentTerm);
                         needAppendLog->set_type(::ToyRaft::RaftLog::APPEND);
                         needAppendLog->set_buf(log[i].buf());
                     }
-                    requestAppend.set_term(term);
+                    requestAppend.set_term(currentTerm);
                     requestAppend.set_currentleaderid(id);
                     requestAppend.set_leadercommit(commitIndex);
                     requestAppend.set_prelogindex(nodeIter->second->matchIndex);
@@ -144,8 +177,8 @@ namespace ToyRaft {
         int ret = 0;
         ::ToyRaft::RequestVoteResponse voteRspMsg;
         // 以前的任期已经投过票了，所以不投给他
-        if (term >= requestVote.term()) {
-            voteRspMsg.set_term(term);
+        if (currentTerm >= requestVote.term()) {
+            voteRspMsg.set_term(currentTerm);
             voteRspMsg.set_voteforme(false);
         }
             // 假设他的任期更大，那么比较日志那个更新
@@ -155,7 +188,7 @@ namespace ToyRaft {
             // 投票请求的最后提交的日志的任期小于当前日志的最后任期
             // 那么不投票给他
             if (lastApplied.term() > requestVote.lastlogterm()) {
-                voteRspMsg.set_term(term);
+                voteRspMsg.set_term(currentTerm);
                 voteRspMsg.set_voteforme(false);
             }
                 // 投票请求的最后提交的日志的任期等于当前日志的最后任期
@@ -164,13 +197,13 @@ namespace ToyRaft {
                 // 假如当前应用到状态机的index比投票请求的大
                 // 那么不投票给他
                 if (lastAppliedIndex > requestVote.lastlogindex()) {
-                    voteRspMsg.set_term(term);
+                    voteRspMsg.set_term(currentTerm);
                     voteRspMsg.set_voteforme(false);
                 } else {
                     // 投票给候选者，并把自己的状态变为follower，
                     // 设置当前任期和投票给的人
                     becomeFollower(requestVote.term(), requestVote.candidateid());
-                    voteRspMsg.set_term(term);
+                    voteRspMsg.set_term(currentTerm);
                     voteRspMsg.set_voteforme(true);
                 }
             }
@@ -179,7 +212,7 @@ namespace ToyRaft {
                 // 投票给候选者，并把自己的状态变为follower，
                 // 设置当前任期和投票给的人
                 becomeFollower(requestVote.term(), requestVote.candidateid());
-                voteRspMsg.set_term(term);
+                voteRspMsg.set_term(currentTerm);
                 voteRspMsg.set_voteforme(true);
             }
         }
@@ -200,7 +233,7 @@ namespace ToyRaft {
         if (Status::CANDIDATE != state) {
             return 0;
         }
-        if (requestVoteResponse.term() == term && requestVoteResponse.voteforme()) {
+        if (requestVoteResponse.term() == currentTerm && requestVoteResponse.voteforme()) {
             voteCount++;
         }
         if (voteCount >= (nodes.size() / 2 + 1)) {
@@ -218,12 +251,12 @@ namespace ToyRaft {
         int ret = 0;
         ::ToyRaft::RequestAppendResponse appendRsp;
 
-        // 当term小于或者等于requestAppend的term的时候，那么直接成为follower,并处理appendLog请求
-        if (term <= requestAppend.term()) {
+        // 当currentTerm小于或者等于requestAppend的term的时候，那么直接成为follower,并处理appendLog请求
+        if (currentTerm <= requestAppend.term()) {
             becomeFollower(requestAppend.term(), requestAppend.currentleaderid());
             // 当前的lastAppliedIndex小于preLogIndex，那么直接返回错误
             if (lastAppliedIndex < requestAppend.prelogindex()) {
-                appendRsp.set_term(term);
+                appendRsp.set_term(currentTerm);
                 appendRsp.set_appliedindex(lastAppliedIndex);
                 appendRsp.set_success(false);
             } else {
@@ -253,11 +286,11 @@ namespace ToyRaft {
                     }
                     lastAppliedIndex = LogIndex - 1;
                     commitIndex = min(requestAppend.leadercommit(), commitIndex);
-                    appendRsp.set_term(term);
+                    appendRsp.set_term(currentTerm);
                     appendRsp.set_appliedindex(lastAppliedIndex);
                     appendRsp.set_success(true);
                 } else {
-                    appendRsp.set_term(term);
+                    appendRsp.set_term(currentTerm);
                     appendRsp.set_appliedindex(lastAppliedIndex);
                     appendRsp.set_success(false);
                 }
@@ -266,7 +299,7 @@ namespace ToyRaft {
             // 当前的term大于requestAppend的term，
             // 那么说明这个leader是过期的，直接返回false，并告诉他出现异常
         else {
-            appendRsp.set_term(term);
+            appendRsp.set_term(currentTerm);
             appendRsp.set_appliedindex(lastAppliedIndex);
             appendRsp.set_success(false);
         }
