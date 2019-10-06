@@ -12,6 +12,7 @@ set(Protobuf_USE_STATIC_LIBS ON)
 if (Protobuf_FOUND)
 
     file(GLOB BAR_PROTOS "proto/*.proto")
+    set(GRPC_CPP_PLUGIN /usr/local/bin/grpc_cpp_plugin)
 
     foreach (protofile ${BAR_PROTOS})
 
@@ -22,16 +23,21 @@ if (Protobuf_FOUND)
         list(APPEND proto_include ${proto_include_h})
         list(REMOVE_DUPLICATES proto_include)
         list(APPEND proto_src ${proto_include_h}/${proto_src_cc}.pb.cc)
+        list(APPEND grpc_src ${proto_include_h}/${proto_src_cc}.grpc.pb.cc)
 
         execute_process(COMMAND ${Protobuf_PROTOC_EXECUTABLE}
                 -I${proto_include_h} --cpp_out=${proto_include_h} ${proto_src_cc}.proto)
+        execute_process(COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+                -I${proto_include_h} --grpc_out=${proto_include_h}
+                --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}
+                ${proto_src_cc}.proto)
     endforeach ()
 
     include_directories(include ${PROTOBUF_INCLUDE_DIRS} ${proto_include})
 
     add_library(ToyRaft STATIC ${toyraft_src} ${proto_src})
 
-    target_link_libraries(ToyRaft ${PROTOBUF_LIBRARIES})
+    target_link_libraries(ToyRaft ${PROTOBUF_LIBRARIES} grpc)
 else ()
     message(FATAL_ERROR "FATAL: libprotobuf not found.")
 endif ()

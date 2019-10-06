@@ -2,6 +2,10 @@ syntax = "proto3";
 
 package ToyRaft;
 
+service SendAndReply {
+    rpc serverRaft(AllSend) returns (ServerSendBack) {}
+}
+
 message RequestVote {
     int64 term = 1;
     int64 candidateId = 2;
@@ -51,4 +55,8 @@ message AllSend {
     RequestVoteResponse requestVoteResponse = 3;
     RequestAppend requestAppend = 4;
     RequestAppendResponse requestAppendResponse = 5;
+}
+
+message ServerSendBack {
+    int32 num = 1;
 }
