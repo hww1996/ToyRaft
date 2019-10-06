@@ -7,6 +7,7 @@
 #include "raft.pb.h"
 
 #ifndef TOYRAFT_RAFT_H
+#define TOYRAFT_RAFT_H
 
 namespace ToyRaft {
     enum Status {
@@ -17,14 +18,9 @@ namespace ToyRaft {
     public:
         int tick();
 
-        // 从网络中获取数据
-        int sendToNet(int64_t, ::ToyRaft::AllSend &);
-
-        int recvFromNet(::ToyRaft::AllSend &);
-
+    private:
         int recv();
 
-    private:
         // 发送vote请求
         int sendRequestVote();
 
@@ -34,9 +30,7 @@ namespace ToyRaft {
         // 状态改变
         int becomeLeader();
 
-        int becomeFollower();
-
-        int becomeFollower(int64_t term, int64_t voteFor);
+        int becomeFollower(int64_t term, int64_t leaderId);
 
         int becomeCandidate();
 
@@ -54,8 +48,8 @@ namespace ToyRaft {
 
         // 任期相关
         int64_t id;
-        int64_t term;
-        int64_t votedFor;
+        int64_t currentTerm;
+        int64_t currentLeaderId;
         int64_t voteCount;
 
         std::vector<::ToyRaft::RaftLog> log;
@@ -77,7 +71,5 @@ namespace ToyRaft {
 
 
 } // namespace ToyRaft
-
-#define TOYRAFT_RAFT_H
 
 #endif //TOYRAFT_RAFT_H
