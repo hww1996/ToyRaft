@@ -379,7 +379,7 @@ namespace ToyRaft {
         int ret = 0;
         while (true) {
             ::ToyRaft::AllSend allSend;
-            ret = RaftNet::recvFromNet(allSend);
+            ret = RaftNet::recvFromNet(&allSend);
             if (0 >= ret) {
                 break;
             }
