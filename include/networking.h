@@ -40,8 +40,6 @@ namespace ToyRaft {
                 std::unique_ptr<::ToyRaft::SendAndReply::Stub>> sendIdMapping;
         static std::thread recvThread;
         static std::thread sendThread;
-        static std::mutex recvMutex;
-        static std::mutex sendMutex;
     };
 } // namespace ToyRaft
 #endif //TOYRAFT_NET_H

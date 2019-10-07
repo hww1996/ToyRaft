@@ -3,14 +3,13 @@
 //
 
 #include "networking.h"
+#include "globalmutext.h"
 
 namespace ToyRaft {
     NetData::NetData(int64_t id, const ::ToyRaft::AllSend &allSend) : id_(id), buf_(allSend){}
 
     std::deque<::ToyRaft::NetData> RaftNet::recvBuf;
     std::deque<::ToyRaft::NetData> RaftNet::sendBuf;
-    std::mutex RaftNet::recvMutex;
-    std::mutex RaftNet::sendMutex;
     std::thread RaftNet::recvThread(RaftNet::realRecv);
     std::thread RaftNet::sendThread(RaftNet::realSend);
 
@@ -23,7 +22,7 @@ namespace ToyRaft {
         int ret = 0;
         NetData netData(id, allSend);
         {
-            std::lock_guard<std::mutex> lock(sendMutex);
+            std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::sendBufMutex);
             sendBuf.push_back(netData);
         }
         return ret;
@@ -32,7 +31,7 @@ namespace ToyRaft {
     int RaftNet::recvFromNet(::ToyRaft::AllSend *allSend) {
         int ret = 0;
         {
-            std::lock_guard<std::mutex> lock(recvMutex);
+            std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::recvBufMutex);
             ret = recvBuf.size();
             if (0 != ret) {
                 *allSend = recvBuf.front().buf_;
