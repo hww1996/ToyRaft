@@ -31,12 +31,18 @@ namespace ToyRaft {
         return *this;
     }
 
-    NodesConfig::NodesConfig(const std::string &path) : configPath_(path) {
+    NodesConfig::NodesConfig(const std::string &path) : configPath_(path), nowBuf(0) {
         loadConfig();
     }
 
     std::unordered_map<int, std::shared_ptr<NodeConfig> > NodesConfig::get() {
-        return NodesConf;
+        return NodesConf[nowBuf];
+    }
+
+    static void clearNodesConf(std::unordered_map<int, std::shared_ptr<NodeConfig> > &config) {
+        for (auto configIt = config.begin(); config.end() != configIt;) {
+            config.erase(configIt++);
+        }
     }
 
     int NodesConfig::loadConfig() {
@@ -49,6 +55,12 @@ namespace ToyRaft {
             file >> jsonData;
             file.close();
         }
+
+        int secondConfIndex = 1 - nowBuf;
+
+        auto &secondConf = NodesConf[secondConfIndex];
+
+        clearNodesConf(secondConf);
 
         rapidjson::Document doc;
         doc.Parse(jsonData.c_str(), jsonData.size());
@@ -66,13 +78,15 @@ namespace ToyRaft {
             assert(nodes[i].HasMember("port"));
             assert(nodes[i]["port"].IsNumber());
             int nowId = nodes[i]["id"].GetInt();
-            NodesConf[nowId]=std::shared_ptr<NodeConfig>(new NodeConfig
+            secondConf[nowId] = std::shared_ptr<NodeConfig>(new NodeConfig
                                                                  (
                                                                          nodes[i]["id"].GetInt(),
                                                                          nodes[i]["ip"].GetString(),
                                                                          nodes[i]["port"].GetInt()
                                                                  ));
         }
+
+        nowBuf = secondConfIndex;
 
         return ret;
     }

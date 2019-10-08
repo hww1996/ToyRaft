@@ -3,6 +3,7 @@
 //
 
 #include <unordered_map>
+#include <vector>
 #include <string>
 
 #ifndef TOYRAFT_CONFIG_H
@@ -28,11 +29,12 @@ namespace ToyRaft {
 
         std::unordered_map<int, std::shared_ptr<NodeConfig> > get();
 
-    private:
         int loadConfig();
 
+    private:
         std::string configPath_;
-        std::unordered_map<int, std::shared_ptr<NodeConfig> > NodesConf;
+        int nowBuf;
+        std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > NodesConf;
     };
 
     class ServerConfig {
