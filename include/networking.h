@@ -23,7 +23,7 @@ namespace ToyRaft {
 
     class RaftNet {
     public:
-        RaftNet();
+        RaftNet(const std::string &nodesConfigPath, const std::string &serverConfigPath);
         // 从网络中获取数据
         static int sendToNet(int64_t, ::ToyRaft::AllSend &);
 
@@ -34,12 +34,15 @@ namespace ToyRaft {
 
         static int realRecv();
 
-        static std::deque<::ToyRaft::NetData> recvBuf;
-        static std::deque<::ToyRaft::NetData> sendBuf;
+        static std::deque<std::shared_ptr<::ToyRaft::NetData> > recvBuf;
+        static std::deque<std::shared_ptr<::ToyRaft::NetData> > sendBuf;
         static std::unordered_map<int,
                 std::unique_ptr<::ToyRaft::SendAndReply::Stub>> sendIdMapping;
         static std::thread recvThread;
         static std::thread sendThread;
+
+        static std::string nodesConfigPath_;
+        static std::string serverConfigPath_;
     };
 } // namespace ToyRaft
 #endif //TOYRAFT_NET_H
