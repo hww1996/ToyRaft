@@ -54,7 +54,7 @@ namespace ToyRaft {
         }
         auto nodesConfig = NodesConfig(nodesConfigPath_);
         while (true) {
-            std::this_thread::sleep_for(1S);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
             ret = nodesConfig.loadConfig();
             if (0 != ret) {
                 break;
