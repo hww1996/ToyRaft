@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package ToyRaft;
+
+service OutSideService {
+    rpc serverOutSide(RaftClientMsg) returns (RaftServerMsg) {}
+}
+
+message ClientQueryMsg {
+    int64 startIndex = 1;
+    int64 endIndex = 2;
+}
+
+message ClientAppendMsg {
+    repeated bytes appendLog = 1;
+}
+
+message RaftClientMsg {
+    enum QueryType {
+        APPEND = 0;
+        QUERY = 1;
+    }
+    QueryType queryType = 1;
+    ClientQueryMsg clientQueryMsg = 2;
+    ClientAppendMsg clientAppendMsg = 3;
+}
+
+message ServerRedirectMsg {
+    string ip = 1;
+}
+
+message ServerQueryMsg {
+    int64 commitIndex = 1;
+    int64 appliedIndex = 2;
+    repeated bytes appendLog = 3;
+}
+
+message RaftServerMsg {
+    enum SendBackType {
+        APPEND = 0;
+        REDIRECT = 1;
+        QUERY = 2;
+    }
+    SendBackType sendBackType = 1;
+    ServerRedirectMsg serverRedirectMsg = 2;
+    ServerQueryMsg serverQueryMsg = 3;
+}
