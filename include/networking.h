@@ -27,7 +27,7 @@ namespace ToyRaft {
         NetData(int64_t id, const ::ToyRaft::AllSend &allSend);
     };
 
-    class ServerRaftImpl final : public ::ToyRaft::Service {
+    class ServerRaftImpl final : public ::ToyRaft::SendAndReply::Service {
         ::grpc::Status serverRaft(::grpc::ServerContext *context, const ::ToyRaft::AllSend *request,
                                   ::ToyRaft::ServerSendBack *response);
     };

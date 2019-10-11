@@ -2,6 +2,8 @@
 // Created by hww1996 on 2019/10/6.
 //
 
+#include <memory>
+
 #include <grpc/grpc.h>
 #include <grpcpp/server.h>
 #include <grpcpp/server_builder.h>
@@ -38,7 +40,8 @@ namespace ToyRaft {
         ::grpc::Status sta = ::grpc::Status::OK;
         {
             std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::recvBufMutex);
-            ::ToyRaft::RaftNet::recvBuf.push_back(std::make_shared(-1, *request));
+            ::ToyRaft::RaftNet::recvBuf.push_back(std::shared_ptr<::ToyRaft::NetData>(
+                    new NetData(-1,*request)));
         }
         response->set_num(0);
         return sta;
