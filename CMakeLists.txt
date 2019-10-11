@@ -35,6 +35,6 @@ endforeach ()
 
 include_directories(include ${PROTOBUF_INCLUDE_DIRS} ${proto_include} ${RapidJSON_INCLUDE_DIR})
 
-add_library(ToyRaft STATIC ${toyraft_src} ${proto_src})
+add_library(ToyRaft STATIC ${toyraft_src} ${proto_src} ${grpc_src})
 
 target_link_libraries(ToyRaft ${PROTOBUF_LIBRARIES} grpc)
