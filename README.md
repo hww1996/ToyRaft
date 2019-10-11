@@ -1,2 +1,2 @@
 # ToyRaft
-lean the raft
+learn the raft
