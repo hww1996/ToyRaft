@@ -33,7 +33,7 @@ message RequestAppend {
     int64 preLogTerm = 3;
     int64 preLogIndex = 4;
     int64 leaderCommit = 5;
-    repeated RaftLog entries =6;
+    repeated RaftLog entries = 6;
 }
 
 message RequestAppendResponse {
