@@ -20,7 +20,7 @@ namespace ToyRaft {
         RaftServer(const std::string &nodesConfigPath, const std::string &serverConfigPath);
 
         int serverForever();
-
+        
         static int recvFromNet(std::vector<std::string> &netLog);
 
         static int pushReadBuffer(int start, int commit, const std::vector<::ToyRaft::RaftLog> &log);
