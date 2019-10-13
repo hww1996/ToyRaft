@@ -7,10 +7,37 @@
 
 #include "raft.h"
 #include "networking.h"
+#include "config.h"
 
 namespace ToyRaft {
     static int64_t min(int64_t a, int64_t b) {
         return a > b ? b : a;
+    }
+
+    Peers::Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex) : id(nodeId), nextIndex(peersNextIndex), matchIndex(peersMatchIndex)  {}
+
+    Raft::Raft(const std::string &serverConfigPath) :log(std::vector<::ToyRaft::RaftLog>()), nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
+        ServerConfig serverConfig(serverConfigPath);
+        auto nodesConfigMap = NodesConfig::get();
+        id = serverConfig.getId();
+        currentTerm = -1;
+        currentLeaderId = -1;
+        commitIndex = -1;
+        lastAppliedIndex = -1;
+        state = Status::FOLLOWER;
+
+        heartBeatTick = 0;
+        heartBeatTick = 0;
+
+        for (auto nodesConfigIt = nodesConfigMap.begin(); nodesConfigMap.end() != nodesConfigIt; ++nodesConfigIt) {
+            nodes[nodesConfigIt->first] = std::make_shared(nodesConfigIt->second->id_, 0, -1);
+        }
+
+        time_t seed = time(NULL);
+        srand(static_cast<unsigned int>(seed));
+        int64_t standerElectionTimeOut = heartBeatTimeout * 10;
+        electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
+        heartBeatTimeout = 1;
     }
 
     /**
@@ -323,7 +350,7 @@ namespace ToyRaft {
             if (nodes.end() == nodes.find(requestAppendResponse.sentbackid())) {
                 ret = -1;
             } else {
-                auto node = nodes[requestAppendResponse.sentbackid()];
+                auto &node = nodes[requestAppendResponse.sentbackid()];
                 if (requestAppendResponse.success()) {
                     node->matchIndex = requestAppendResponse.appliedindex();
                     node->nextIndex = node->matchIndex + 1;
@@ -392,6 +419,7 @@ namespace ToyRaft {
                     break;
                 case ::ToyRaft::AllSend::REQAPPEND:
                     ret = handleRequestAppend(allSend.requestappend());
+                    heartBeatTick = 0;
                     break;
                 case ::ToyRaft::AllSend::APPENDRSP:
                     ret = handleRequestAppendResponse(allSend.requestappendresponse());

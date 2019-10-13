@@ -23,11 +23,21 @@ namespace ToyRaft {
 
         static int pushReadBuffer(int start, int commit, const std::vector<::ToyRaft::RaftLog> &log);
 
+        /**
+         * [from,to)
+         * @param buf
+         * @param from
+         * @param to
+         * @return
+         */
+        static int getReadBuffer(std::vector<std::string> &buf, int from, int to);
+
     private:
-        static std::string NodesConfigPath_;
-        static std::string ServerConfigPath_;
+        static std::string nodesConfigPath_;
+        static std::string serverConfigPath_;
         static std::deque<::ToyRaft::RaftClientMsg> request;
-        static std::vector<std::string> ReadBuffer;
+        static std::vector<std::string> readBuffer;
+        static int commit_;
     };
 } // namespace ToyRaft
 

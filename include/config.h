@@ -27,21 +27,22 @@ namespace ToyRaft {
     public:
         NodesConfig(const std::string &path);
 
-        std::unordered_map<int, std::shared_ptr<NodeConfig> > get();
-
-        int loadConfig();
+        static std::unordered_map<int, std::shared_ptr<NodeConfig> > get();
 
     private:
-        std::string configPath_;
-        int nowBuf;
-        std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > NodesConf;
+        static int loadConfig();
+        static std::string configPath_;
+        static int nowBuf;
+        static std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > NodesConf;
     };
 
     class ServerConfig {
     public:
         ServerConfig(const std::string &path);
 
-        int getPort();
+        int getInnerPort();
+
+        int getOuterPort();
 
         int getId();
 
@@ -49,7 +50,8 @@ namespace ToyRaft {
         int loadConfig();
 
         std::string configPath_;
-        int port_;
+        int innerPort_;
+        int outerPort_;
         int id_;
     };
 
