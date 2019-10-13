@@ -4,13 +4,45 @@
 
 #include <cstdlib>
 #include <ctime>
+#include <memory>
 
 #include "raft.h"
 #include "networking.h"
+#include "config.h"
+#include "raftserver.h"
 
 namespace ToyRaft {
     static int64_t min(int64_t a, int64_t b) {
         return a > b ? b : a;
+    }
+
+    Peers::Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex) : id(nodeId),
+                                                                                    nextIndex(peersNextIndex),
+                                                                                    matchIndex(peersMatchIndex) {}
+
+    Raft::Raft(const std::string &serverConfigPath) : log(std::vector<::ToyRaft::RaftLog>()),
+                                                      nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
+        ServerConfig serverConfig(serverConfigPath);
+        auto nodesConfigMap = NodesConfig::get();
+        id = serverConfig.getId();
+        currentTerm = -1;
+        currentLeaderId = -1;
+        commitIndex = -1;
+        lastAppliedIndex = -1;
+        state = Status::FOLLOWER;
+
+        heartBeatTick = 0;
+        heartBeatTick = 0;
+
+        for (auto nodesConfigIt = nodesConfigMap.begin(); nodesConfigMap.end() != nodesConfigIt; ++nodesConfigIt) {
+            nodes[nodesConfigIt->first] = std::make_shared<Peers>(nodesConfigIt->second->id_, 0, -1);
+        }
+
+        time_t seed = time(NULL);
+        srand(static_cast<unsigned int>(seed));
+        int64_t standerElectionTimeOut = heartBeatTimeout * 10;
+        electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
+        heartBeatTimeout = 1;
     }
 
     /**
@@ -129,12 +161,31 @@ namespace ToyRaft {
         return ret;
     }
 
+    int Raft::getFromOuterNet() {
+        int ret = 0;
+        std::vector<std::string> res;
+        ret = RaftServer::recvFromNet(res);
+        if (0 != ret) {
+            return ret;
+        }
+        for (int i = 0; i < res.size(); i++) {
+            RaftLog raftLog;
+            raftLog.set_term(currentTerm);
+            raftLog.set_type(::ToyRaft::RaftLog::APPEND);
+            raftLog.set_buf(res[i].c_str(), res[i].size());
+            log.push_back(raftLog);
+            lastAppliedIndex++;
+        }
+        return ret;
+    }
+
     /**
      * @brief 请求复制log
      * @return
      */
     int Raft::sendRequestAppend() {
         int ret = 0;
+        ret = getFromOuterNet();
         if (Status::LEADER != state) {
             return -1;
         } else {
@@ -145,7 +196,7 @@ namespace ToyRaft {
                         auto needAppendLog = requestAppend.add_entries();
                         needAppendLog->set_term(currentTerm);
                         needAppendLog->set_type(::ToyRaft::RaftLog::APPEND);
-                        needAppendLog->set_buf(log[i].buf());
+                        needAppendLog->set_buf(log[i].buf().c_str(), log[i].buf().size());
                     }
                     requestAppend.set_term(currentTerm);
                     requestAppend.set_currentleaderid(id);
@@ -323,7 +374,7 @@ namespace ToyRaft {
             if (nodes.end() == nodes.find(requestAppendResponse.sentbackid())) {
                 ret = -1;
             } else {
-                auto node = nodes[requestAppendResponse.sentbackid()];
+                auto &node = nodes[requestAppendResponse.sentbackid()];
                 if (requestAppendResponse.success()) {
                     node->matchIndex = requestAppendResponse.appliedindex();
                     node->nextIndex = node->matchIndex + 1;
@@ -392,6 +443,7 @@ namespace ToyRaft {
                     break;
                 case ::ToyRaft::AllSend::REQAPPEND:
                     ret = handleRequestAppend(allSend.requestappend());
+                    heartBeatTick = 0;
                     break;
                 case ::ToyRaft::AllSend::APPENDRSP:
                     ret = handleRequestAppendResponse(allSend.requestappendresponse());

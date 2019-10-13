@@ -14,8 +14,18 @@ namespace ToyRaft {
         FOLLOWER, CANDIDATE, LEADER,
     };
 
+    struct Peers {
+        int64_t id;
+        int64_t nextIndex;
+        int64_t matchIndex;
+
+        Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex);
+    };
+
     class Raft {
     public:
+        Raft(const std::string &serverConfigPath);
+
         int tick();
 
     private:
@@ -46,6 +56,9 @@ namespace ToyRaft {
 
         int commit();
 
+        // 外面的请求发送log过来
+        int getFromOuterNet();
+
         // 任期相关
         int64_t id;
         int64_t currentTerm;
@@ -61,9 +74,7 @@ namespace ToyRaft {
         int heartBeatTick;
         int electionTick;
 
-        std::unordered_map<int64_t, std::shared_ptr<ToyRaft::Raft>> nodes;
-        int64_t nextIndex;
-        int64_t matchIndex;
+        std::unordered_map<int64_t, std::shared_ptr<Peers>> nodes;
 
         int electionTimeout;
         int heartBeatTimeout;

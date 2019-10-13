@@ -1,4 +1,5 @@
 {
-  "listenPort":1234,
+  "innerListenPort":1234,
+  "outerListenPort":2345,
   "id":1
 }

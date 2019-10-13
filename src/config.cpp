@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <cassert>
+#include <thread>
 
 #include <rapidjson/document.h>
 
@@ -15,7 +16,7 @@ namespace ToyRaft {
     NodeConfig::NodeConfig(int64_t id, const std::string &ip, int port) : id_(id), ip_(ip), port_(port) {}
 
     NodeConfig::NodeConfig(const ToyRaft::NodeConfig &nodeConfig) {
-        if(this == &nodeConfig)
+        if (this == &nodeConfig)
             return;
         this->id_ = nodeConfig.id_;
         this->ip_ = nodeConfig.ip_;
@@ -23,7 +24,7 @@ namespace ToyRaft {
     }
 
     NodeConfig &NodeConfig::operator=(const ToyRaft::NodeConfig &nodeConfig) {
-        if(this == &nodeConfig)
+        if (this == &nodeConfig)
             return *this;
         this->id_ = nodeConfig.id_;
         this->ip_ = nodeConfig.ip_;
@@ -31,8 +32,17 @@ namespace ToyRaft {
         return *this;
     }
 
-    NodesConfig::NodesConfig(const std::string &path) : configPath_(path), nowBuf(0) {
+    std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > NodesConfig::NodesConf(2,
+                                                                                               std::unordered_map<int, std::shared_ptr<NodeConfig> >());
+    std::string NodesConfig::configPath_;
+
+    int NodesConfig::nowBuf;
+
+    NodesConfig::NodesConfig(const std::string &path) {
+        configPath_ = path;
         loadConfig();
+        std::thread loadConfigThread(loadConfig);
+        loadConfigThread.detach();
     }
 
     std::unordered_map<int, std::shared_ptr<NodeConfig> > NodesConfig::get() {
@@ -48,13 +58,12 @@ namespace ToyRaft {
     int NodesConfig::loadConfig() {
         int ret = 0;
         std::string jsonData;
-        {
-            std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::nodeConfigMutex);
-            std::fstream file;
-            file.open(configPath_, std::fstream::in);
-            file >> jsonData;
-            file.close();
-        }
+        // 这里需要采取rename的方式写入文件，因为rename在操作系统层面是原子操作
+        // 共享读影响
+        std::fstream file;
+        file.open(configPath_, std::fstream::in);
+        file >> jsonData;
+        file.close();
 
         int secondConfIndex = 1 - nowBuf;
 
@@ -66,7 +75,7 @@ namespace ToyRaft {
         doc.Parse(jsonData.c_str(), jsonData.size());
 
         assert(doc.HasMember("nodes"));
-        const rapidjson::Value& nodes = doc["nodes"];
+        const rapidjson::Value &nodes = doc["nodes"];
         assert(nodes.IsArray());
         for (rapidjson::SizeType i = 0; i < nodes.Size(); i++) {
 
@@ -78,12 +87,8 @@ namespace ToyRaft {
             assert(nodes[i].HasMember("port"));
             assert(nodes[i]["port"].IsNumber());
             int nowId = nodes[i]["id"].GetInt();
-            secondConf[nowId] = std::shared_ptr<NodeConfig>(new NodeConfig
-                                                                 (
-                                                                         nodes[i]["id"].GetInt(),
-                                                                         nodes[i]["ip"].GetString(),
-                                                                         nodes[i]["port"].GetInt()
-                                                                 ));
+            secondConf[nowId] = std::shared_ptr<NodeConfig>(
+                    new NodeConfig(nodes[i]["id"].GetInt(), nodes[i]["ip"].GetString(), nodes[i]["port"].GetInt()));
         }
 
         nowBuf = secondConfIndex;
@@ -99,8 +104,12 @@ namespace ToyRaft {
         return id_;
     }
 
-    int ServerConfig::getPort() {
-        return port_;
+    int ServerConfig::getInnerPort() {
+        return innerPort_;
+    }
+
+    int ServerConfig::getOuterPort() {
+        return outerPort_;
     }
 
     int ServerConfig::loadConfig() {
@@ -114,13 +123,18 @@ namespace ToyRaft {
         rapidjson::Document doc;
         doc.Parse(jsonData.c_str(), jsonData.size());
 
-        assert(doc.HasMember("listenPort"));
-        const rapidjson::Value& listenPort = doc["listenPort"];
-        assert(listenPort.IsNumber());
-        port_ = listenPort.GetInt();
+        assert(doc.HasMember("innerListenPort"));
+        const rapidjson::Value &innerListenPort = doc["innerListenPort"];
+        assert(innerListenPort.IsNumber());
+        innerPort_ = innerListenPort.GetInt();
+
+        assert(doc.HasMember("outerListenPort"));
+        const rapidjson::Value &outerListenPort = doc["outerListenPort"];
+        assert(outerListenPort.IsNumber());
+        outerPort_ = outerListenPort.GetInt();
 
         assert(doc.HasMember("id"));
-        const rapidjson::Value& nodeId = doc["id"];
+        const rapidjson::Value &nodeId = doc["id"];
         assert(nodeId.IsNumber());
         id_ = nodeId.GetInt();
 

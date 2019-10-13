@@ -11,7 +11,8 @@ namespace ToyRaft{
     struct GlobalMutex {
         static std::mutex recvBufMutex;
         static std::mutex sendBufMutex;
-        static std::mutex nodeConfigMutex;
+        static std::mutex requestMutex;
+        static std::mutex readBufferMutex;
     };
 }// namespace ToyRaft
 #endif //TOYRAFT_GLOBALMUTEXT_H

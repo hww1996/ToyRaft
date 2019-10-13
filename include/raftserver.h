@@ -7,10 +7,12 @@
 
 #include <deque>
 #include <string>
+#include <vector>
 
 #include "globalmutext.h"
 #include "config.h"
 #include "raftserver.pb.h"
+#include "raft.pb.h"
 
 namespace ToyRaft {
     class RaftServer {
@@ -18,21 +20,26 @@ namespace ToyRaft {
         RaftServer(const std::string &nodesConfigPath, const std::string &serverConfigPath);
 
         int serverForever();
+        
+        static int recvFromNet(std::vector<std::string> &netLog);
 
-        int recvFromNet();
+        static int pushReadBuffer(int start, int commit, const std::vector<::ToyRaft::RaftLog> &log);
 
-        static ::ToyRaft::NodesConfig &getNodesConfig();
-        static ::ToyRaft::ServerConfig &getServerConfig();
+        /**
+         * [from,to)
+         * @param buf
+         * @param from
+         * @param to
+         * @return
+         */
+        static int getReadBuffer(std::vector<std::string> &buf, int from, int to);
 
     private:
-        static ::ToyRaft::NodesConfig nodesConfig;
-        static std::string NodesConfigPath_;
-
-        static ::ToyRaft::ServerConfig serverConfig;
-        static std::string ServerConfigPath_;
-
+        static std::string nodesConfigPath_;
+        static std::string serverConfigPath_;
         static std::deque<::ToyRaft::RaftClientMsg> request;
-        static std::deque<::ToyRaft::RaftServerMsg> response;
+        static std::vector<std::string> readBuffer;
+        static int commit_;
     };
 } // namespace ToyRaft
 

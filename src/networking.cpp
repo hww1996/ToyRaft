@@ -20,17 +20,14 @@ namespace ToyRaft {
 
     std::deque<std::shared_ptr<::ToyRaft::NetData> > RaftNet::recvBuf;
     std::deque<std::shared_ptr<::ToyRaft::NetData> > RaftNet::sendBuf;
-    std::thread RaftNet::recvThread(RaftNet::realRecv);
-    std::thread RaftNet::sendThread(RaftNet::realSend);
-
     std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub>> RaftNet::sendIdMapping;
 
-    std::string RaftNet::nodesConfigPath_;
     std::string RaftNet::serverConfigPath_;
 
-    RaftNet::RaftNet(const std::string &nodesConfigPath, const std::string &serverConfigPath) {
-        nodesConfigPath_ = nodesConfigPath;
+    RaftNet::RaftNet(const std::string &serverConfigPath) {
         serverConfigPath_ = serverConfigPath;
+        std::thread recvThread(RaftNet::realRecv);
+        std::thread sendThread(RaftNet::realSend);
         recvThread.detach();
         sendThread.detach();
     }
@@ -40,8 +37,7 @@ namespace ToyRaft {
         ::grpc::Status sta = ::grpc::Status::OK;
         {
             std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::recvBufMutex);
-            ::ToyRaft::RaftNet::recvBuf.push_back(std::shared_ptr<::ToyRaft::NetData>(
-                    new NetData(-1,*request)));
+            ::ToyRaft::RaftNet::recvBuf.push_back(std::shared_ptr<::ToyRaft::NetData>(new NetData(-1, *request)));
         }
         response->set_num(0);
         return sta;
@@ -107,18 +103,10 @@ namespace ToyRaft {
 
     int RaftNet::realSend() {
         int ret = 0;
-        if (0 == nodesConfigPath_.size()) {
-            exit(-1);
-        }
-        auto nodesConfig = NodesConfig(nodesConfigPath_);
-        auto serverConfig = ServerConfig(serverConfigPath_);
+        ServerConfig serverConfig(serverConfigPath_);
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
-            ret = nodesConfig.loadConfig();
-            if (0 != ret) {
-                break;
-            }
-            auto nowNodesConfig = nodesConfig.get();
+            auto nowNodesConfig = NodesConfig::get();
             inertConnectPool(sendIdMapping, nowNodesConfig, serverConfig.getId());
             std::shared_ptr<NetData> netData = nullptr;
             {
@@ -139,8 +127,8 @@ namespace ToyRaft {
 
     int RaftNet::realRecv() {
         int ret = 0;
-        auto serverConfig = ServerConfig(serverConfigPath_);
-        initServer(serverConfig.getPort());
+        ServerConfig serverConfig(serverConfigPath_);
+        initServer(serverConfig.getInnerPort());
         return ret;
     }
 } // namespace ToyRaft
