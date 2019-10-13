@@ -123,10 +123,15 @@ namespace ToyRaft {
         rapidjson::Document doc;
         doc.Parse(jsonData.c_str(), jsonData.size());
 
-        assert(doc.HasMember("listenPort"));
-        const rapidjson::Value &listenPort = doc["listenPort"];
-        assert(listenPort.IsNumber());
-        port_ = listenPort.GetInt();
+        assert(doc.HasMember("innerListenPort"));
+        const rapidjson::Value &innerListenPort = doc["innerListenPort"];
+        assert(innerListenPort.IsNumber());
+        innerPort_ = innerListenPort.GetInt();
+
+        assert(doc.HasMember("outerListenPort"));
+        const rapidjson::Value &outerListenPort = doc["outerListenPort"];
+        assert(outerListenPort.IsNumber());
+        outerPort_ = outerListenPort.GetInt();
 
         assert(doc.HasMember("id"));
         const rapidjson::Value &nodeId = doc["id"];

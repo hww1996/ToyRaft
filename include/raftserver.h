@@ -11,6 +11,7 @@
 #include "globalmutext.h"
 #include "config.h"
 #include "raftserver.pb.h"
+#include "raft.pb.h"
 
 namespace ToyRaft {
     class RaftServer {

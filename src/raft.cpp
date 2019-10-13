@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <ctime>
+#include <memory>
 
 #include "raft.h"
 #include "networking.h"
@@ -30,7 +31,7 @@ namespace ToyRaft {
         heartBeatTick = 0;
 
         for (auto nodesConfigIt = nodesConfigMap.begin(); nodesConfigMap.end() != nodesConfigIt; ++nodesConfigIt) {
-            nodes[nodesConfigIt->first] = std::make_shared(nodesConfigIt->second->id_, 0, -1);
+            nodes[nodesConfigIt->first] = std::make_shared<Peers>(nodesConfigIt->second->id_, 0, -1);
         }
 
         time_t seed = time(NULL);

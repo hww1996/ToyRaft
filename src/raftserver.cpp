@@ -5,7 +5,6 @@
 #include "globalmutext.h"
 #include "raft.h"
 #include "networking.h"
-#include "raft.pb.h"
 
 namespace ToyRaft {
     std::string RaftServer::nodesConfigPath_;
@@ -17,7 +16,7 @@ namespace ToyRaft {
     RaftServer::RaftServer(const std::string &nodesConfigPath, const std::string &serverConfigPath) {
         nodesConfigPath_ = nodesConfigPath;
         serverConfigPath_ = serverConfigPath;
-        RaftNet::RaftNet(serverConfigPath_);
+        RaftNet r(serverConfigPath_);
     }
 
     int RaftServer::serverForever() {
