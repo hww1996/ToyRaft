@@ -7,6 +7,7 @@
 
 #include <deque>
 #include <string>
+#include <vector>
 
 #include "globalmutext.h"
 #include "config.h"
@@ -20,7 +21,7 @@ namespace ToyRaft {
 
         int serverForever();
 
-        static int recvFromNet();
+        static int recvFromNet(std::vector<std::string> &netLog);
 
         static int pushReadBuffer(int start, int commit, const std::vector<::ToyRaft::RaftLog> &log);
 

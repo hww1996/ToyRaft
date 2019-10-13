@@ -9,15 +9,19 @@
 #include "raft.h"
 #include "networking.h"
 #include "config.h"
+#include "raftserver.h"
 
 namespace ToyRaft {
     static int64_t min(int64_t a, int64_t b) {
         return a > b ? b : a;
     }
 
-    Peers::Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex) : id(nodeId), nextIndex(peersNextIndex), matchIndex(peersMatchIndex)  {}
+    Peers::Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex) : id(nodeId),
+                                                                                    nextIndex(peersNextIndex),
+                                                                                    matchIndex(peersMatchIndex) {}
 
-    Raft::Raft(const std::string &serverConfigPath) :log(std::vector<::ToyRaft::RaftLog>()), nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
+    Raft::Raft(const std::string &serverConfigPath) : log(std::vector<::ToyRaft::RaftLog>()),
+                                                      nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
         ServerConfig serverConfig(serverConfigPath);
         auto nodesConfigMap = NodesConfig::get();
         id = serverConfig.getId();
@@ -157,12 +161,31 @@ namespace ToyRaft {
         return ret;
     }
 
+    int Raft::getFromOuterNet() {
+        int ret = 0;
+        std::vector<std::string> res;
+        ret = RaftServer::recvFromNet(res);
+        if (0 != ret) {
+            return ret;
+        }
+        for (int i = 0; i < res.size(); i++) {
+            RaftLog raftLog;
+            raftLog.set_term(currentTerm);
+            raftLog.set_type(::ToyRaft::RaftLog::APPEND);
+            raftLog.set_buf(res[i].c_str(), res[i].size());
+            log.push_back(raftLog);
+            lastAppliedIndex++;
+        }
+        return ret;
+    }
+
     /**
      * @brief 请求复制log
      * @return
      */
     int Raft::sendRequestAppend() {
         int ret = 0;
+        ret = getFromOuterNet();
         if (Status::LEADER != state) {
             return -1;
         } else {
@@ -173,7 +196,7 @@ namespace ToyRaft {
                         auto needAppendLog = requestAppend.add_entries();
                         needAppendLog->set_term(currentTerm);
                         needAppendLog->set_type(::ToyRaft::RaftLog::APPEND);
-                        needAppendLog->set_buf(log[i].buf());
+                        needAppendLog->set_buf(log[i].buf().c_str(), log[i].buf().size());
                     }
                     requestAppend.set_term(currentTerm);
                     requestAppend.set_currentleaderid(id);

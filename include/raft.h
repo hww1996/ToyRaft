@@ -18,12 +18,14 @@ namespace ToyRaft {
         int64_t id;
         int64_t nextIndex;
         int64_t matchIndex;
+
         Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex);
     };
 
     class Raft {
     public:
         Raft(const std::string &serverConfigPath);
+
         int tick();
 
     private:
@@ -53,6 +55,9 @@ namespace ToyRaft {
         int handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse &);
 
         int commit();
+
+        // 外面的请求发送log过来
+        int getFromOuterNet();
 
         // 任期相关
         int64_t id;

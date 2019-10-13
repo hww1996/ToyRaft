@@ -16,9 +16,23 @@ namespace ToyRaft {
     RaftServer::RaftServer(const std::string &nodesConfigPath, const std::string &serverConfigPath) {
         nodesConfigPath_ = nodesConfigPath;
         serverConfigPath_ = serverConfigPath;
+        NodesConfig config(nodesConfigPath_);
         RaftNet r(serverConfigPath_);
     }
-
+    int RaftServer::recvFromNet(std::vector<std::string> &netLog) {
+        int ret = 0;
+        {
+            std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
+            while (!request.empty()) {
+                auto Logs = request.front().clientappendmsg().appendlog();
+                for (int i = 0; i < Logs.size(); i++) {
+                    netLog.emplace_back(Logs[i].c_str(), Logs[i].size());
+                }
+                request.pop_front();
+            }
+        }
+        return ret;
+    }
     int RaftServer::serverForever() {
         int ret = 0;
         Raft raft(serverConfigPath_);
