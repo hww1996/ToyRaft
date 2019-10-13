@@ -19,20 +19,15 @@ namespace ToyRaft {
 
         int serverForever();
 
-        int recvFromNet();
+        static int recvFromNet();
 
-        static ::ToyRaft::NodesConfig &getNodesConfig();
-        static ::ToyRaft::ServerConfig &getServerConfig();
+        static int pushReadBuffer(int start, int commit, const std::vector<::ToyRaft::RaftLog> &log);
 
     private:
-        static ::ToyRaft::NodesConfig nodesConfig;
         static std::string NodesConfigPath_;
-
-        static ::ToyRaft::ServerConfig serverConfig;
         static std::string ServerConfigPath_;
-
         static std::deque<::ToyRaft::RaftClientMsg> request;
-        static std::deque<::ToyRaft::RaftServerMsg> response;
+        static std::vector<std::string> ReadBuffer;
     };
 } // namespace ToyRaft
 

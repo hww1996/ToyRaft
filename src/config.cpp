@@ -48,13 +48,12 @@ namespace ToyRaft {
     int NodesConfig::loadConfig() {
         int ret = 0;
         std::string jsonData;
-        {
-            std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::nodeConfigMutex);
-            std::fstream file;
-            file.open(configPath_, std::fstream::in);
-            file >> jsonData;
-            file.close();
-        }
+        // 这里需要采取rename的方式写入文件，因为rename在操作系统层面是原子操作
+        // 共享读影响
+        std::fstream file;
+        file.open(configPath_, std::fstream::in);
+        file >> jsonData;
+        file.close();
 
         int secondConfIndex = 1 - nowBuf;
 

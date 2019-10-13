@@ -8,7 +8,8 @@ namespace ToyRaft {
 
     std::mutex GlobalMutex::recvBufMutex;
     std::mutex GlobalMutex::sendBufMutex;
-    std::mutex GlobalMutex::nodeConfigMutex;
+    std::mutex GlobalMutex::requestMutex;
+    std::mutex GlobalMutex::readBufferMutex;
 
 } // namespace ToyRaft
 
