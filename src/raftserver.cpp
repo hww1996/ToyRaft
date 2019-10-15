@@ -7,6 +7,8 @@
 #include "networking.h"
 
 namespace ToyRaft {
+
+
     std::string RaftServer::nodesConfigPath_;
     std::string RaftServer::serverConfigPath_;
     std::deque<::ToyRaft::RaftClientMsg> RaftServer::request;
@@ -18,8 +20,41 @@ namespace ToyRaft {
         serverConfigPath_ = serverConfigPath;
         NodesConfig config(nodesConfigPath_);
         RaftNet r(serverConfigPath_);
+        std::thread t(recvFromNet);
+        t.detach();
     }
-    int RaftServer::recvFromNet(std::vector<std::string> &netLog) {
+    ::grpc::Status OuterServiceImpl::serverOutSide(::grpc::ServerContext* context,
+                                 const ::ToyRaft::RaftClientMsg* request,
+                                 ::ToyRaft::RaftServerMsg* response) {
+        ::grpc::Status sta = ::grpc::Status::OK;
+        switch (request->querytype()) {
+            case ::ToyRaft::RaftClientMsg::APPEND:
+                break;
+            case ::ToyRaft::RaftClientMsg::QUERY:
+                break;
+            default:
+                break;
+        }
+        return sta;
+    }
+    static void initOuterServer(int port) {
+        std::string server_address = "0.0.0.0:";
+        server_address += std::to_string(port);
+        ::ToyRaft::OuterServiceImpl service;
+
+        ::grpc::ServerBuilder builder;
+        builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+        builder.RegisterService(&service);
+        std::unique_ptr<::grpc::Server> server(builder.BuildAndStart());
+        server->Wait();
+    }
+    int RaftServer::recvFromNet() {
+        int ret = 0;
+        ServerConfig serverConfig(serverConfigPath_);
+        initOuterServer(serverConfig.getOuterPort());
+        return ret;
+    }
+    int RaftServer::getNetLogs(std::vector<std::string> &netLog) {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);

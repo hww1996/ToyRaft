@@ -13,15 +13,22 @@
 #include "config.h"
 #include "raftserver.pb.h"
 #include "raft.pb.h"
+#include "raftserver.grpc.pb.h"
 
 namespace ToyRaft {
+    class OuterServiceImpl : public ::ToyRaft::OutSideService::Service {
+        ::grpc::Status serverOutSide(::grpc::ServerContext* context, const ::ToyRaft::RaftClientMsg* request, ::ToyRaft::RaftServerMsg* response);
+    };
+
     class RaftServer {
     public:
         RaftServer(const std::string &nodesConfigPath, const std::string &serverConfigPath);
 
         int serverForever();
+
+        static int recvFromNet();
         
-        static int recvFromNet(std::vector<std::string> &netLog);
+        static int getNetLogs(std::vector<std::string> &netLog);
 
         static int pushReadBuffer(int start, int commit, const std::vector<::ToyRaft::RaftLog> &log);
 

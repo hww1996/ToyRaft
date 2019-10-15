@@ -43,7 +43,7 @@ namespace ToyRaft {
         return sta;
     }
 
-    static void initServer(int port) {
+    static void initInnerServer(int port) {
         std::string server_address = "0.0.0.0:";
         server_address += std::to_string(port);
         ::ToyRaft::ServerRaftImpl service;
@@ -128,7 +128,7 @@ namespace ToyRaft {
     int RaftNet::realRecv() {
         int ret = 0;
         ServerConfig serverConfig(serverConfigPath_);
-        initServer(serverConfig.getInnerPort());
+        initInnerServer(serverConfig.getInnerPort());
         return ret;
     }
 } // namespace ToyRaft

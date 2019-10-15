@@ -164,7 +164,7 @@ namespace ToyRaft {
     int Raft::getFromOuterNet() {
         int ret = 0;
         std::vector<std::string> res;
-        ret = RaftServer::recvFromNet(res);
+        ret = RaftServer::getNetLogs(res);
         if (0 != ret) {
             return ret;
         }
