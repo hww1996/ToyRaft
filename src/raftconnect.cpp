@@ -11,7 +11,7 @@
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
 
-#include "networking.h"
+#include "raftconnect.h"
 #include "globalmutext.h"
 #include "config.h"
 

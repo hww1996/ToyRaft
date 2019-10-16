@@ -10,6 +10,7 @@ namespace ToyRaft {
     std::mutex GlobalMutex::sendBufMutex;
     std::mutex GlobalMutex::requestMutex;
     std::mutex GlobalMutex::readBufferMutex;
+    std::mutex GlobalMutex::OuterRaftStatusMutex;
 
 } // namespace ToyRaft
 

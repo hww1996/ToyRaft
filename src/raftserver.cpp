@@ -4,7 +4,7 @@
 #include "raftserver.h"
 #include "globalmutext.h"
 #include "raft.h"
-#include "networking.h"
+#include "raftconnect.h"
 
 namespace ToyRaft {
 
@@ -13,7 +13,6 @@ namespace ToyRaft {
     std::string RaftServer::serverConfigPath_;
     std::deque<::ToyRaft::RaftClientMsg> RaftServer::request;
     std::vector<std::string> RaftServer::readBuffer;
-    int RaftServer::commit_ = 0;
 
     RaftServer::RaftServer(const std::string &nodesConfigPath, const std::string &serverConfigPath) {
         nodesConfigPath_ = nodesConfigPath;
@@ -27,6 +26,11 @@ namespace ToyRaft {
                                  const ::ToyRaft::RaftClientMsg* request,
                                  ::ToyRaft::RaftServerMsg* response) {
         ::grpc::Status sta = ::grpc::Status::OK;
+        int64_t currentLeaderId = -1;
+        Status  state = FOLLOWER;
+        int64_t commitIndex = -1;
+        int ret = OuterRaftStatus::get(currentLeaderId, state, commitIndex);
+
         switch (request->querytype()) {
             case ::ToyRaft::RaftClientMsg::APPEND:
                 break;
@@ -81,12 +85,11 @@ namespace ToyRaft {
         return ret;
     }
 
-    int RaftServer::pushReadBuffer(int start, int commit, const std::vector<::ToyRaft::RaftLog> &log) {
+    int RaftServer::pushReadBuffer(const std::vector<::ToyRaft::RaftLog> &log) {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::readBufferMutex);
-            int index = start;
-            commit_ = commit;
+            int index = 0;
             for (; index < readBuffer.size(); index++) {
                 readBuffer[index].assign(log[index].buf().c_str(), log[index].buf().size());
             }
@@ -97,7 +100,7 @@ namespace ToyRaft {
         return ret;
     }
 
-    int RaftServer::getReadBuffer(std::vector<std::string> &buf, int from, int to) {
+    int RaftServer::getReadBuffer(std::vector<std::string> &buf, int from, int to, int commit) {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::readBufferMutex);
@@ -107,8 +110,8 @@ namespace ToyRaft {
             if (from >= to) {
                 return -2;
             }
-            if (to > commit_ + 1) {
-                to = commit_ + 1;
+            if (to > commit + 1) {
+                to = commit + 1;
             }
             for (int i = from; i < to; i++) {
                 buf.emplace_back(readBuffer[i].c_str(), readBuffer[i].size());

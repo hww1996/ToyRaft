@@ -50,11 +50,12 @@ message AllSend {
         REQAPPEND = 2;
         APPENDRSP = 3;
     }
-    SendType sendType = 1;
-    RequestVote requestVote = 2;
-    RequestVoteResponse requestVoteResponse = 3;
-    RequestAppend requestAppend = 4;
-    RequestAppendResponse requestAppendResponse = 5;
+    int64 sendFrom = 1;
+    SendType sendType = 2;
+    RequestVote requestVote = 3;
+    RequestVoteResponse requestVoteResponse = 4;
+    RequestAppend requestAppend = 5;
+    RequestAppendResponse requestAppendResponse = 6;
 }
 
 message ServerSendBack {
