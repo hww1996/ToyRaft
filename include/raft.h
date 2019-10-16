@@ -18,8 +18,20 @@ namespace ToyRaft {
         int64_t id;
         int64_t nextIndex;
         int64_t matchIndex;
+        bool isVoteForMe;
 
         Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex);
+    };
+
+    class OuterRaftStatus {
+    public:
+        static int push(int64_t leaderId, Status state, int64_t commitIndex);
+        static int get(int64_t& leaderId, Status& state, int64_t& commitIndex);
+    private:
+        static int64_t leaderId_;
+        static Status state_;
+        static int64_t commitIndex_;
+
     };
 
     class Raft {
@@ -45,14 +57,14 @@ namespace ToyRaft {
         int becomeCandidate();
 
         // 处理投票
-        int handleRequestVote(const ::ToyRaft::RequestVote &);
+        int handleRequestVote(const ::ToyRaft::RequestVote &, int64_t sendFrom);
 
-        int handleRequestVoteResponse(const ::ToyRaft::RequestVoteResponse &);
+        int handleRequestVoteResponse(const ::ToyRaft::RequestVoteResponse &, int64_t sendFrom);
 
         // 处理日志复制
-        int handleRequestAppend(const ::ToyRaft::RequestAppend &);
+        int handleRequestAppend(const ::ToyRaft::RequestAppend &, int64_t sendFrom);
 
-        int handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse &);
+        int handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse &, int64_t sendFrom);
 
         int commit();
 
@@ -63,7 +75,6 @@ namespace ToyRaft {
         int64_t id;
         int64_t currentTerm;
         int64_t currentLeaderId;
-        int64_t voteCount;
 
         std::vector<::ToyRaft::RaftLog> log;
         int64_t commitIndex;

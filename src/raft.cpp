@@ -7,18 +7,47 @@
 #include <memory>
 
 #include "raft.h"
-#include "networking.h"
+#include "raftconnect.h"
 #include "config.h"
 #include "raftserver.h"
+#include "globalmutext.h"
 
 namespace ToyRaft {
     static int64_t min(int64_t a, int64_t b) {
         return a > b ? b : a;
     }
 
+    int64_t OuterRaftStatus::leaderId_ = -1;
+    Status OuterRaftStatus::state_ = FOLLOWER;
+    int64_t OuterRaftStatus::commitIndex_ = -1;
+
+    int OuterRaftStatus::push(int64_t leaderId, Status state, int64_t commitIndex) {
+        int ret = 0;
+        {
+            std::lock_guard<std::mutex> lock(GlobalMutex::OuterRaftStatusMutex);
+            leaderId_ = leaderId;
+            state_ = state;
+            commitIndex_ = commitIndex;
+        }
+        return ret;
+    }
+
+    int OuterRaftStatus::get(int64_t& leaderId, Status& state, int64_t& commitIndex) {
+        int ret = 0;
+        {
+            std::lock_guard<std::mutex> lock(GlobalMutex::OuterRaftStatusMutex);
+            leaderId = leaderId_;
+            state = state_;
+            commitIndex = commitIndex_;
+        }
+        return ret;
+    }
+
+
     Peers::Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex) : id(nodeId),
                                                                                     nextIndex(peersNextIndex),
-                                                                                    matchIndex(peersMatchIndex) {}
+                                                                                    matchIndex(peersMatchIndex),
+                                                                                    isVoteForMe(false) {}
 
     Raft::Raft(const std::string &serverConfigPath) : log(std::vector<::ToyRaft::RaftLog>()),
                                                       nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
@@ -56,6 +85,8 @@ namespace ToyRaft {
 
         int ret = 0;
 
+        OuterRaftStatus::push(currentLeaderId, state, commitIndex);
+
         if (electionTick >= electionTimeout) {
             ret = becomeCandidate();
             if (0 != ret) {
@@ -84,6 +115,8 @@ namespace ToyRaft {
             }
         }
 
+        RaftServer::pushReadBuffer(log);
+
         return ret;
     }
 
@@ -110,7 +143,10 @@ namespace ToyRaft {
 
         currentLeaderId = id;
 
-        voteCount = 1;
+        for (auto nodesIt = nodes.begin(); nodes.end() != nodesIt; ++nodesIt) {
+            nodesIt->second->isVoteForMe = false;
+        }
+        nodes[id]->isVoteForMe = true;
 
         time_t seed = time(NULL);
         srand(static_cast<unsigned int>(seed));
@@ -147,6 +183,7 @@ namespace ToyRaft {
             for (auto nodeIter = nodes.begin(); nodes.end() != nodeIter; ++nodeIter) {
                 if (nodeIter->second->id != id) {
                     ::ToyRaft::AllSend allSend;
+                    allSend.set_sendfrom(id);
                     allSend.set_sendtype(::ToyRaft::AllSend::REQVOTE);
                     allSend.set_allocated_requestvote(&requestVote);
                     ret = RaftNet::sendToNet(nodeIter->second->id, allSend);
@@ -164,7 +201,7 @@ namespace ToyRaft {
     int Raft::getFromOuterNet() {
         int ret = 0;
         std::vector<std::string> res;
-        ret = RaftServer::recvFromNet(res);
+        ret = RaftServer::getNetLogs(res);
         if (0 != ret) {
             return ret;
         }
@@ -208,6 +245,7 @@ namespace ToyRaft {
                         requestAppend.set_prelogterm(log[nodeIter->second->matchIndex].term());
                     }
                     ::ToyRaft::AllSend allSend;
+                    allSend.set_sendfrom(id);
                     allSend.set_sendtype(::ToyRaft::AllSend::REQAPPEND);
                     allSend.set_allocated_requestappend(&requestAppend);
                     ret = RaftNet::sendToNet(nodeIter->second->id, allSend);
@@ -225,7 +263,7 @@ namespace ToyRaft {
      * @param requestVote
      * @return 错误码
      */
-    int Raft::handleRequestVote(const ::ToyRaft::RequestVote &requestVote) {
+    int Raft::handleRequestVote(const ::ToyRaft::RequestVote &requestVote, int64_t sendFrom) {
         int ret = 0;
         ::ToyRaft::RequestVoteResponse voteRspMsg;
         // 以前的任期已经投过票了，所以不投给他
@@ -269,6 +307,7 @@ namespace ToyRaft {
             }
         }
         ::ToyRaft::AllSend requestVoteRsp;
+        requestVoteRsp.set_sendfrom(id);
         requestVoteRsp.set_sendtype(::ToyRaft::AllSend::VOTERSP);
         requestVoteRsp.set_allocated_requestvoteresponse(&voteRspMsg);
         ret = RaftNet::sendToNet(requestVote.candidateid(), requestVoteRsp);
@@ -280,13 +319,19 @@ namespace ToyRaft {
      * @param requestVoteResponse
      * @return
      */
-    int Raft::handleRequestVoteResponse(const ::ToyRaft::RequestVoteResponse &requestVoteResponse) {
+    int Raft::handleRequestVoteResponse(const ::ToyRaft::RequestVoteResponse &requestVoteResponse, int64_t sendFrom) {
         int ret = 0;
         if (Status::CANDIDATE != state) {
             return 0;
         }
         if (requestVoteResponse.term() == currentTerm && requestVoteResponse.voteforme()) {
-            voteCount++;
+            nodes[sendFrom]->isVoteForMe = true;
+        }
+        int voteCount = 0;
+        for (auto nodesIt = nodes.begin(); nodes.end() != nodesIt; ++nodesIt) {
+            if (nodesIt->second->isVoteForMe) {
+                voteCount++;
+            }
         }
         if (voteCount >= (nodes.size() / 2 + 1)) {
             becomeLeader();
@@ -299,7 +344,7 @@ namespace ToyRaft {
      * @param requestAppend
      * @return
      */
-    int Raft::handleRequestAppend(const ::ToyRaft::RequestAppend &requestAppend) {
+    int Raft::handleRequestAppend(const ::ToyRaft::RequestAppend &requestAppend, int64_t sendFrom) {
         int ret = 0;
         ::ToyRaft::RequestAppendResponse appendRsp;
 
@@ -357,6 +402,7 @@ namespace ToyRaft {
         }
         ::ToyRaft::AllSend requestAppendRsp;
         appendRsp.set_sentbackid(id);
+        requestAppendRsp.set_sendfrom(id);
         requestAppendRsp.set_sendtype(::ToyRaft::AllSend::APPENDRSP);
         requestAppendRsp.set_allocated_requestappendresponse(&appendRsp);
         ret = RaftNet::sendToNet(requestAppend.currentleaderid(), requestAppendRsp);
@@ -368,7 +414,7 @@ namespace ToyRaft {
      * @param requestAppendResponse
      * @return
      */
-    int Raft::handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse &requestAppendResponse) {
+    int Raft::handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse &requestAppendResponse, int64_t sendFrom) {
         int ret = 0;
         if (Status::LEADER == state) {
             if (nodes.end() == nodes.find(requestAppendResponse.sentbackid())) {
@@ -436,17 +482,17 @@ namespace ToyRaft {
             }
             switch (allSend.sendtype()) {
                 case ::ToyRaft::AllSend::REQVOTE:
-                    ret = handleRequestVote(allSend.requestvote());
+                    ret = handleRequestVote(allSend.requestvote(), allSend.sendfrom());
                     break;
                 case ::ToyRaft::AllSend::VOTERSP:
-                    ret = handleRequestVoteResponse(allSend.requestvoteresponse());
+                    ret = handleRequestVoteResponse(allSend.requestvoteresponse(), allSend.sendfrom());
                     break;
                 case ::ToyRaft::AllSend::REQAPPEND:
-                    ret = handleRequestAppend(allSend.requestappend());
+                    ret = handleRequestAppend(allSend.requestappend(), allSend.sendfrom());
                     heartBeatTick = 0;
                     break;
                 case ::ToyRaft::AllSend::APPENDRSP:
-                    ret = handleRequestAppendResponse(allSend.requestappendresponse());
+                    ret = handleRequestAppendResponse(allSend.requestappendresponse(), allSend.sendfrom());
                     break;
                 default:
                     break;

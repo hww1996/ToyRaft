@@ -27,6 +27,7 @@ message RaftClientMsg {
 
 message ServerRedirectMsg {
     string ip = 1;
+    int32 port = 2;
 }
 
 message ServerQueryMsg {
@@ -40,6 +41,7 @@ message RaftServerMsg {
         APPEND = 0;
         REDIRECT = 1;
         QUERY = 2;
+        RETRY = 3;
     }
     SendBackType sendBackType = 1;
     ServerRedirectMsg serverRedirectMsg = 2;
