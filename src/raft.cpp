@@ -382,7 +382,7 @@ namespace ToyRaft {
                         LogIndex++;
                     }
                     lastAppliedIndex = LogIndex - 1;
-                    commitIndex = min(requestAppend.leadercommit(), commitIndex);
+                    commitIndex = min(requestAppend.leadercommit(), lastAppliedIndex);
                     appendRsp.set_term(currentTerm);
                     appendRsp.set_appliedindex(lastAppliedIndex);
                     appendRsp.set_success(true);
