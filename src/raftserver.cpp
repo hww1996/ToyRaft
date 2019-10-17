@@ -7,7 +7,36 @@
 #include "raftconnect.h"
 
 namespace ToyRaft {
+    ::grpc::Status
+    OuterServiceImpl::serverOutSide(::grpc::ServerContext *context, const ::ToyRaft::RaftClientMsg *request,
+                                    ::ToyRaft::RaftServerMsg *response) {
+        ::grpc::Status sta = ::grpc::Status::OK;
+        int64_t currentLeaderId = -1;
+        Status state = FOLLOWER;
+        int64_t commitIndex = -1;
+        int ret = OuterRaftStatus::get(currentLeaderId, state, commitIndex);
 
+        switch (request->querytype()) {
+            case ::ToyRaft::RaftClientMsg::APPEND: {
+                if (LEADER != state) {
+                    
+                }
+                auto needAppendLog = request->clientappendmsg().appendlog();
+                for (auto &i : needAppendLog) {
+                    {
+                        std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
+                        RaftServer::request.emplace_back(i.c_str(), i.size());
+                    }
+                }
+            }
+                break;
+            case ::ToyRaft::RaftClientMsg::QUERY:
+                break;
+            default:
+                break;
+        }
+        return sta;
+    }
 
     std::string RaftServer::nodesConfigPath_;
     std::string RaftServer::serverConfigPath_;
@@ -22,25 +51,7 @@ namespace ToyRaft {
         std::thread t(recvFromNet);
         t.detach();
     }
-    ::grpc::Status OuterServiceImpl::serverOutSide(::grpc::ServerContext* context,
-                                 const ::ToyRaft::RaftClientMsg* request,
-                                 ::ToyRaft::RaftServerMsg* response) {
-        ::grpc::Status sta = ::grpc::Status::OK;
-        int64_t currentLeaderId = -1;
-        Status  state = FOLLOWER;
-        int64_t commitIndex = -1;
-        int ret = OuterRaftStatus::get(currentLeaderId, state, commitIndex);
 
-        switch (request->querytype()) {
-            case ::ToyRaft::RaftClientMsg::APPEND:
-                break;
-            case ::ToyRaft::RaftClientMsg::QUERY:
-                break;
-            default:
-                break;
-        }
-        return sta;
-    }
     static void initOuterServer(int port) {
         std::string server_address = "0.0.0.0:";
         server_address += std::to_string(port);
@@ -52,12 +63,14 @@ namespace ToyRaft {
         std::unique_ptr<::grpc::Server> server(builder.BuildAndStart());
         server->Wait();
     }
+
     int RaftServer::recvFromNet() {
         int ret = 0;
         ServerConfig serverConfig(serverConfigPath_);
         initOuterServer(serverConfig.getOuterPort());
         return ret;
     }
+
     int RaftServer::getNetLogs(std::vector<std::string> &netLog) {
         int ret = 0;
         {
@@ -72,13 +85,14 @@ namespace ToyRaft {
         }
         return ret;
     }
+
     int RaftServer::serverForever() {
         int ret = 0;
         Raft raft(serverConfigPath_);
-        while(true) {
+        while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             ret = raft.tick();
-            if(ret != 0) {
+            if (ret != 0) {
                 break;
             }
         }

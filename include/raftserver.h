@@ -17,7 +17,8 @@
 
 namespace ToyRaft {
     class OuterServiceImpl : public ::ToyRaft::OutSideService::Service {
-        ::grpc::Status serverOutSide(::grpc::ServerContext* context, const ::ToyRaft::RaftClientMsg* request, ::ToyRaft::RaftServerMsg* response);
+        ::grpc::Status serverOutSide(::grpc::ServerContext *context, const ::ToyRaft::RaftClientMsg *request,
+                                     ::ToyRaft::RaftServerMsg *response);
     };
 
     class RaftServer {
@@ -48,6 +49,7 @@ namespace ToyRaft {
         static std::deque<::ToyRaft::RaftClientMsg> request;
         static std::vector<std::string> readBuffer;
         friend class Raft;
+        friend class OuterServiceImpl;
     };
 } // namespace ToyRaft
 

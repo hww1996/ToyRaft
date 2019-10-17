@@ -11,10 +11,10 @@ aux_source_directory(src toyraft_src)
 
 set(Protobuf_USE_STATIC_LIBS ON)
 
-file(GLOB BAR_PROTOS "proto/*.proto")
+file(GLOB GLOB_PROTOS "proto/*.proto")
 set(GRPC_CPP_PLUGIN /usr/local/bin/grpc_cpp_plugin)
 
-foreach (protofile ${BAR_PROTOS})
+foreach (protofile ${GLOB_PROTOS})
 
     get_filename_component(proto_include_h ${protofile} DIRECTORY)
 
