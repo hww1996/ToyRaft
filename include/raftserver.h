@@ -23,7 +23,7 @@ namespace ToyRaft {
 
     class RaftServer {
     public:
-        RaftServer(const std::string &nodesConfigPath, const std::string &serverConfigPath);
+        RaftServer(const std::string &raftConfigPath);
 
         int serverForever();
 
@@ -44,8 +44,7 @@ namespace ToyRaft {
          */
         static int getReadBuffer(std::vector<std::string> &buf, int from, int to, int commit);
 
-        static std::string nodesConfigPath_;
-        static std::string serverConfigPath_;
+        std::string raftConfigPath_;
         static std::deque<::ToyRaft::RaftClientMsg> request;
         static std::vector<std::string> readBuffer;
         friend class Raft;

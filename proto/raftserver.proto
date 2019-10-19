@@ -32,16 +32,15 @@ message ServerRedirectMsg {
 
 message ServerQueryMsg {
     int64 commitIndex = 1;
-    int64 appliedIndex = 2;
-    repeated bytes appendLog = 3;
+    repeated bytes appendLog = 2;
 }
 
 message RaftServerMsg {
     enum SendBackType {
-        APPEND = 0;
+        OK = 0;
         REDIRECT = 1;
-        QUERY = 2;
-        RETRY = 3;
+        RETRY = 2;
+        UNKNOWN = 3;
     }
     SendBackType sendBackType = 1;
     ServerRedirectMsg serverRedirectMsg = 2;

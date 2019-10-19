@@ -51,9 +51,8 @@ namespace ToyRaft {
 
     Raft::Raft(const std::string &serverConfigPath) : log(std::vector<::ToyRaft::RaftLog>()),
                                                       nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
-        ServerConfig serverConfig(serverConfigPath);
-        auto nodesConfigMap = NodesConfig::get();
-        id = serverConfig.getId();
+        auto nodesConfigMap = RaftConfig::getNodes();
+        id = RaftConfig::getId();
         currentTerm = -1;
         currentLeaderId = -1;
         commitIndex = -1;

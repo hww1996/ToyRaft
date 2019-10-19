@@ -17,37 +17,48 @@ namespace ToyRaft {
         int ret = OuterRaftStatus::get(currentLeaderId, state, commitIndex);
 
         switch (request->querytype()) {
-            case ::ToyRaft::RaftClientMsg::APPEND: {
-                if (LEADER != state) {
-                    
+            case ::ToyRaft::RaftClientMsg::APPEND:
+                switch (state) {
+                    case FOLLOWER:
+                        auto nodes = RaftConfig::getNodes();
+                        response->set_sendbacktype(RaftServerMsg::REDIRECT);
+                        ServerRedirectMsg sendRedirectMsg;
+                        sendRedirectMsg.set_ip(nodes[currentLeaderId]->ip_);
+                        sendRedirectMsg.set_port(nodes[currentLeaderId]->port_);
+                        response->set_allocated_serverredirectmsg(&sendRedirectMsg);
+                        return sta;
+                    case CANDIDATE:
+                        response->set_sendbacktype(RaftServerMsg::RETRY);
+                        return sta;
+                    case LEADER:
+                        auto needAppendLog = request->clientappendmsg().appendlog();
+                        for (auto &i : needAppendLog) {
+                            {
+                                std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
+                                RaftServer::request.emplace_back(i.c_str(), i.size());
+                            }
+                        }
+                        response->set_sendbacktype(RaftServerMsg::OK);
+                        return sta;
+                    default:
+                        response->set_sendbacktype(RaftServerMsg::UNKNOWN);
+                        return sta;
                 }
-                auto needAppendLog = request->clientappendmsg().appendlog();
-                for (auto &i : needAppendLog) {
-                    {
-                        std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
-                        RaftServer::request.emplace_back(i.c_str(), i.size());
-                    }
-                }
-            }
-                break;
             case ::ToyRaft::RaftClientMsg::QUERY:
                 break;
             default:
-                break;
+                response->set_sendbacktype(RaftServerMsg::UNKNOWN);
+                return sta;
         }
         return sta;
     }
 
-    std::string RaftServer::nodesConfigPath_;
-    std::string RaftServer::serverConfigPath_;
     std::deque<::ToyRaft::RaftClientMsg> RaftServer::request;
     std::vector<std::string> RaftServer::readBuffer;
 
-    RaftServer::RaftServer(const std::string &nodesConfigPath, const std::string &serverConfigPath) {
-        nodesConfigPath_ = nodesConfigPath;
-        serverConfigPath_ = serverConfigPath;
-        NodesConfig config(nodesConfigPath_);
-        RaftNet r(serverConfigPath_);
+    RaftServer::RaftServer(const std::string &raftConfigPath) : raftConfigPath_(raftConfigPath) {
+        RaftConfig cs(raftConfigPath);
+        RaftNet r;
         std::thread t(recvFromNet);
         t.detach();
     }
@@ -66,8 +77,7 @@ namespace ToyRaft {
 
     int RaftServer::recvFromNet() {
         int ret = 0;
-        ServerConfig serverConfig(serverConfigPath_);
-        initOuterServer(serverConfig.getOuterPort());
+        initOuterServer(RaftConfig::getOuterPort());
         return ret;
     }
 
@@ -77,8 +87,8 @@ namespace ToyRaft {
             std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
             while (!request.empty()) {
                 auto Logs = request.front().clientappendmsg().appendlog();
-                for (int i = 0; i < Logs.size(); i++) {
-                    netLog.emplace_back(Logs[i].c_str(), Logs[i].size());
+                for (auto &Log : Logs) {
+                    netLog.emplace_back(Log.c_str(), Log.size());
                 }
                 request.pop_front();
             }
@@ -88,7 +98,7 @@ namespace ToyRaft {
 
     int RaftServer::serverForever() {
         int ret = 0;
-        Raft raft(serverConfigPath_);
+        Raft raft(raftConfigPath_);
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             ret = raft.tick();
