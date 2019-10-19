@@ -1,7 +1,7 @@
 {
-  "id":1,
-  "outerListenPort":2345,
-  "innerListenPort":1234,
+  "id": 1,
+  "outerListenPort": 2345,
+  "innerListenPort": 1234,
   "nodes": [
     {
       "id": 1,

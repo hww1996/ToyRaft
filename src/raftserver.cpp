@@ -15,11 +15,14 @@ namespace ToyRaft {
         Status state = FOLLOWER;
         int64_t commitIndex = -1;
         int ret = OuterRaftStatus::get(currentLeaderId, state, commitIndex);
-
+        if (0 != ret) {
+            response->set_sendbacktype(RaftServerMsg::RETRY);
+            return sta;
+        }
         switch (request->querytype()) {
             case ::ToyRaft::RaftClientMsg::APPEND:
                 switch (state) {
-                    case FOLLOWER:
+                    case FOLLOWER: {
                         auto nodes = RaftConfig::getNodes();
                         response->set_sendbacktype(RaftServerMsg::REDIRECT);
                         ServerRedirectMsg sendRedirectMsg;
@@ -27,33 +30,44 @@ namespace ToyRaft {
                         sendRedirectMsg.set_port(nodes[currentLeaderId]->port_);
                         response->set_allocated_serverredirectmsg(&sendRedirectMsg);
                         return sta;
-                    case CANDIDATE:
+                    }
+                    case CANDIDATE: {
                         response->set_sendbacktype(RaftServerMsg::RETRY);
                         return sta;
-                    case LEADER:
-                        auto needAppendLog = request->clientappendmsg().appendlog();
-                        for (auto &i : needAppendLog) {
-                            {
-                                std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
-                                RaftServer::request.emplace_back(i.c_str(), i.size());
-                            }
+                    }
+                    case LEADER: {
+                        {
+                            std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
+                            RaftServer::requestBuf.push_back(*request);
                         }
                         response->set_sendbacktype(RaftServerMsg::OK);
                         return sta;
-                    default:
+                    }
+                    default: {
                         response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                         return sta;
+                    }
                 }
-            case ::ToyRaft::RaftClientMsg::QUERY:
-                break;
+            case ::ToyRaft::RaftClientMsg::QUERY: {
+                ServerQueryMsg serverQueryMsg;
+                auto &clientQueryMsg = request->clientquerymsg();
+                ret = RaftServer::getReadBuffer(serverQueryMsg, clientQueryMsg.startindex(), clientQueryMsg.endindex(),
+                                                commitIndex);
+                if (0 != ret) {
+                    response->set_sendbacktype(RaftServerMsg::RETRY);
+                    return sta;
+                }
+                response->set_sendbacktype(RaftServerMsg::OK);
+                response->set_allocated_serverquerymsg(&serverQueryMsg);
+            }
             default:
                 response->set_sendbacktype(RaftServerMsg::UNKNOWN);
-                return sta;
+                break;
         }
         return sta;
     }
 
-    std::deque<::ToyRaft::RaftClientMsg> RaftServer::request;
+    std::deque<::ToyRaft::RaftClientMsg> RaftServer::requestBuf;
     std::vector<std::string> RaftServer::readBuffer;
 
     RaftServer::RaftServer(const std::string &raftConfigPath) : raftConfigPath_(raftConfigPath) {
@@ -85,12 +99,12 @@ namespace ToyRaft {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
-            while (!request.empty()) {
-                auto Logs = request.front().clientappendmsg().appendlog();
+            while (!requestBuf.empty()) {
+                auto Logs = requestBuf.front().clientappendmsg().appendlog();
                 for (auto &Log : Logs) {
                     netLog.emplace_back(Log.c_str(), Log.size());
                 }
-                request.pop_front();
+                requestBuf.pop_front();
             }
         }
         return ret;
@@ -124,7 +138,7 @@ namespace ToyRaft {
         return ret;
     }
 
-    int RaftServer::getReadBuffer(std::vector<std::string> &buf, int from, int to, int commit) {
+    int RaftServer::getReadBuffer(::ToyRaft::ServerQueryMsg &serverQueryMsg, int from, int to, int commit) {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::readBufferMutex);
@@ -138,7 +152,7 @@ namespace ToyRaft {
                 to = commit + 1;
             }
             for (int i = from; i < to; i++) {
-                buf.emplace_back(readBuffer[i].c_str(), readBuffer[i].size());
+                serverQueryMsg.add_appendlog(readBuffer[i].c_str(), readBuffer[i].size());
             }
         }
         return ret;

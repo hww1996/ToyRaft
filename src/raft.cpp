@@ -32,7 +32,7 @@ namespace ToyRaft {
         return ret;
     }
 
-    int OuterRaftStatus::get(int64_t& leaderId, Status& state, int64_t& commitIndex) {
+    int OuterRaftStatus::get(int64_t &leaderId, Status &state, int64_t &commitIndex) {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::OuterRaftStatusMutex);
@@ -413,7 +413,8 @@ namespace ToyRaft {
      * @param requestAppendResponse
      * @return
      */
-    int Raft::handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse &requestAppendResponse, int64_t sendFrom) {
+    int
+    Raft::handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse &requestAppendResponse, int64_t sendFrom) {
         int ret = 0;
         if (Status::LEADER == state) {
             if (nodes.end() == nodes.find(requestAppendResponse.sentbackid())) {

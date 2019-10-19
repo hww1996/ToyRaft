@@ -7,7 +7,7 @@
 #ifndef TOYRAFT_GLOBALMUTEXT_H
 #define TOYRAFT_GLOBALMUTEXT_H
 
-namespace ToyRaft{
+namespace ToyRaft {
     struct GlobalMutex {
         static std::mutex recvBufMutex;
         static std::mutex sendBufMutex;

@@ -35,19 +35,14 @@ namespace ToyRaft {
 
         static int pushReadBuffer(const std::vector<::ToyRaft::RaftLog> &log);
 
-        /**
-         * [from,to)
-         * @param buf
-         * @param from
-         * @param to
-         * @return
-         */
-        static int getReadBuffer(std::vector<std::string> &buf, int from, int to, int commit);
+        static int getReadBuffer(::ToyRaft::ServerQueryMsg &serverQueryMsg, int from, int to, int commit);
 
         std::string raftConfigPath_;
-        static std::deque<::ToyRaft::RaftClientMsg> request;
+        static std::deque<::ToyRaft::RaftClientMsg> requestBuf;
         static std::vector<std::string> readBuffer;
+
         friend class Raft;
+
         friend class OuterServiceImpl;
     };
 } // namespace ToyRaft
