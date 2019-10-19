@@ -22,10 +22,7 @@ namespace ToyRaft {
     std::deque<std::shared_ptr<::ToyRaft::NetData> > RaftNet::sendBuf;
     std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub>> RaftNet::sendIdMapping;
 
-    std::string RaftNet::serverConfigPath_;
-
-    RaftNet::RaftNet(const std::string &serverConfigPath) {
-        serverConfigPath_ = serverConfigPath;
+    RaftNet::RaftNet() {
         std::thread recvThread(RaftNet::realRecv);
         std::thread sendThread(RaftNet::realSend);
         recvThread.detach();
@@ -55,7 +52,7 @@ namespace ToyRaft {
         server->Wait();
     }
 
-    static int inertConnectPool(std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub> > &sendMap,
+    static int insertConnectPool(std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub> > &sendMap,
                                 std::unordered_map<int, std::shared_ptr<NodeConfig> > &nodesConfig, int id) {
         int ret = 0;
         for (auto nodeIt = nodesConfig.begin(); nodesConfig.end() != nodeIt; ++nodeIt) {
@@ -103,11 +100,10 @@ namespace ToyRaft {
 
     int RaftNet::realSend() {
         int ret = 0;
-        ServerConfig serverConfig(serverConfigPath_);
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
-            auto nowNodesConfig = NodesConfig::get();
-            inertConnectPool(sendIdMapping, nowNodesConfig, serverConfig.getId());
+            auto nowNodesConfig = RaftConfig::getNodes();
+            insertConnectPool(sendIdMapping, nowNodesConfig, RaftConfig::getId());
             std::shared_ptr<NetData> netData = nullptr;
             {
                 std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::sendBufMutex);
@@ -127,8 +123,7 @@ namespace ToyRaft {
 
     int RaftNet::realRecv() {
         int ret = 0;
-        ServerConfig serverConfig(serverConfigPath_);
-        initInnerServer(serverConfig.getInnerPort());
+        initInnerServer(RaftConfig::getInnerPort());
         return ret;
     }
 } // namespace ToyRaft

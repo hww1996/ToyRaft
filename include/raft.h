@@ -26,7 +26,9 @@ namespace ToyRaft {
     class OuterRaftStatus {
     public:
         static int push(int64_t leaderId, Status state, int64_t commitIndex);
-        static int get(int64_t& leaderId, Status& state, int64_t& commitIndex);
+
+        static int get(int64_t &leaderId, Status &state, int64_t &commitIndex);
+
     private:
         static int64_t leaderId_;
         static Status state_;

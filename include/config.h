@@ -17,44 +17,33 @@ namespace ToyRaft {
         int port_;
 
         NodeConfig(int64_t id, const std::string &ip, int port);
-
-        NodeConfig &operator=(const NodeConfig &nodeConfig);
-
-        NodeConfig(const NodeConfig &nodeConfig);
     };
 
-    class NodesConfig {
+    class RaftConfig {
     public:
-        NodesConfig(const std::string &path);
+        RaftConfig(const std::string &path);
 
-        static std::unordered_map<int, std::shared_ptr<NodeConfig> > get();
+        static std::unordered_map<int, std::shared_ptr<NodeConfig> > getNodes();
+
+        static int getInnerPort();
+
+        static int getOuterPort();
+
+        static int getId();
 
     private:
+        static void loadConfigWrap();
+
         static int loadConfig();
-        static std::string configPath_;
-        static int nowBuf;
+
+        static int innerPort_;
+        static int outerPort_;
+        static int id_;
+
+        static std::string raftConfigPath_;
+        static std::atomic<int> nowBuf;
         static std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > NodesConf;
     };
-
-    class ServerConfig {
-    public:
-        ServerConfig(const std::string &path);
-
-        int getInnerPort();
-
-        int getOuterPort();
-
-        int getId();
-
-    private:
-        int loadConfig();
-
-        std::string configPath_;
-        int innerPort_;
-        int outerPort_;
-        int id_;
-    };
-
 }// namespace ToyRaft
 
 #endif //TOYRAFT_CONFIG_H
