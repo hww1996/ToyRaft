@@ -5,48 +5,53 @@
 #include <fstream>
 #include <cassert>
 #include <thread>
+#include <iterator>
 
 #include <rapidjson/document.h>
 
 #include "raftconfig.h"
 #include "globalmutext.h"
+#include "logger.h"
 
 namespace ToyRaft {
 
     NodeConfig::NodeConfig(int64_t id, const std::string &ip, int port) : id_(id), ip_(ip), port_(port) {}
 
     int RaftConfig::outerPort_;
+    int RaftConfig::innerPort_;
 
     int RaftConfig::id_;
 
     std::string RaftConfig::raftConfigPath_;
 
-    std::atomic<int> RaftConfig::nowBuf;
+    std::atomic<int> RaftConfig::nowBufIndex;
 
     std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > RaftConfig::NodesConf(2,
                                                                                               std::unordered_map<int, std::shared_ptr<NodeConfig> >());
 
     RaftConfig::RaftConfig(const std::string &path) {
         raftConfigPath_ = path;
-        nowBuf = 1;
+        nowBufIndex = 1;
         loadConfig();
         std::thread loadConfigThread(loadConfigWrap);
         loadConfigThread.detach();
     }
 
     std::unordered_map<int, std::shared_ptr<NodeConfig> > RaftConfig::getNodes() {
-        return NodesConf[nowBuf.load()];
+        return NodesConf[nowBufIndex.load()];
     }
 
     static void clearNodesConf(std::unordered_map<int, std::shared_ptr<NodeConfig> > &config) {
+        LOGDEBUG("clear the config OK.")
         for (auto configIt = config.begin(); config.end() != configIt;) {
             config.erase(configIt++);
         }
     }
 
     void RaftConfig::loadConfigWrap() {
+        LOGDEBUG("start load config")
         while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::this_thread::sleep_for(std::chrono::seconds(5));
             if (0 != loadConfig()) {
                 break;
             }
@@ -54,20 +59,29 @@ namespace ToyRaft {
     }
 
     int RaftConfig::loadConfig() {
+        LOGDEBUG("loading the config")
         int ret = 0;
-        std::string jsonData;
+
         // 这里需要采取rename的方式写入文件，因为rename在操作系统层面是原子操作
         // 共享读影响
         std::fstream file;
         file.open(raftConfigPath_, std::fstream::in);
-        file >> jsonData;
+        std::istreambuf_iterator<char> beg(file), end;
+        std::string jsonData(beg, end);
         file.close();
 
-        int secondConfIndex = 1 - nowBuf.load();
+        LOGDEBUG("loading the file OK")
+        LOGDEBUG("before change.nowBufIndex: %d", nowBufIndex.load());
+
+        int secondConfIndex = 1 - nowBufIndex.load();
 
         auto &secondConf = NodesConf[secondConfIndex];
+        
+        LOGDEBUG("before cleaning.second conf length: %d", secondConf.size());
 
         clearNodesConf(secondConf);
+
+        LOGDEBUG("after cleaning.second conf length: %d", secondConf.size());
 
         rapidjson::Document doc;
         doc.Parse(jsonData.c_str(), jsonData.size());
@@ -96,7 +110,7 @@ namespace ToyRaft {
             assert(nodes[i].HasMember("id"));
             assert(nodes[i]["id"].IsNumber());
             assert(nodes[i].HasMember("ip"));
-            assert(nodes[i]["ip"].IsNumber());
+            assert(nodes[i]["ip"].IsString());
             assert(nodes[i].HasMember("port"));
             assert(nodes[i]["port"].IsNumber());
             int nowId = nodes[i]["id"].GetInt();
@@ -104,7 +118,11 @@ namespace ToyRaft {
                                                              nodes[i]["port"].GetInt());
         }
 
-        nowBuf.fetch_xor(1);
+        nowBufIndex.fetch_xor(1);
+
+        LOGDEBUG("after change.nowBufIndex: %d", nowBufIndex.load());
+
+        LOGDEBUG("<<<<<<<<<<<");
 
         return ret;
     }
