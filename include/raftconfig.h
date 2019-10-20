@@ -41,7 +41,7 @@ namespace ToyRaft {
         static int id_;
 
         static std::string raftConfigPath_;
-        static std::atomic<int> nowBuf;
+        static std::atomic<int> nowBufIndex;
         static std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > NodesConf;
     };
 }// namespace ToyRaft
