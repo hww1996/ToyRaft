@@ -11,6 +11,14 @@
 
 namespace ToyRaft {
 
+    struct NodeConfig {
+        int64_t id_;
+        std::string ip_;
+        int port_;
+
+        NodeConfig(int64_t id, const std::string &ip, int port);
+    };
+
     class RaftConfig {
     public:
         RaftConfig(const std::string &path);
@@ -24,15 +32,6 @@ namespace ToyRaft {
         static int getId();
 
     private:
-
-        struct NodeConfig {
-            int64_t id_;
-            std::string ip_;
-            int port_;
-
-            NodeConfig(int64_t id, const std::string &ip, int port);
-        };
-
         static void loadConfigWrap();
 
         static int loadConfig();
