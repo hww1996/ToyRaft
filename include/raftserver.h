@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "globalmutext.h"
-#include "config.h"
+#include "raftconfig.h"
 #include "raftserver.pb.h"
 #include "raft.pb.h"
 #include "raftserver.grpc.pb.h"

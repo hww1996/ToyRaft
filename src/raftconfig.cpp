@@ -8,7 +8,7 @@
 
 #include <rapidjson/document.h>
 
-#include "config.h"
+#include "raftconfig.h"
 #include "globalmutext.h"
 
 namespace ToyRaft {

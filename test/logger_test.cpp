@@ -6,7 +6,7 @@
 
 int main() {
     ToyRaft::LOGERROR("This is error.");
-    ToyRaft::LOGERROR("This is error.%s", "OK");
+    ToyRaft::LOGERROR("This is error.%s %d", "OK", 1);
     ToyRaft::LOGWARING("This is warning.");
     ToyRaft::LOGWARING("This is warning.%s", "OK");
     ToyRaft::LOGNOTICE("This is notice.");

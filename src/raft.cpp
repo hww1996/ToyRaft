@@ -8,7 +8,7 @@
 
 #include "raft.h"
 #include "raftconnect.h"
-#include "config.h"
+#include "raftconfig.h"
 #include "raftserver.h"
 #include "globalmutext.h"
 

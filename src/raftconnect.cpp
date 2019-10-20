@@ -13,7 +13,7 @@
 
 #include "raftconnect.h"
 #include "globalmutext.h"
-#include "config.h"
+#include "raftconfig.h"
 
 namespace ToyRaft {
     NetData::NetData(int64_t id, const ::ToyRaft::AllSend &allSend) : id_(id), buf_(allSend) {}
