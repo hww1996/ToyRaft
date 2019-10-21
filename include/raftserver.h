@@ -1,9 +1,6 @@
 //
-// Created by apple on 2019/10/12.
+// Created by hww1996 on 2019/10/12.
 //
-
-#ifndef TOYRAFT_RAFTSERVER_H
-#define TOYRAFT_RAFTSERVER_H
 
 #include <deque>
 #include <string>
@@ -14,6 +11,9 @@
 #include "raftserver.pb.h"
 #include "raft.pb.h"
 #include "raftserver.grpc.pb.h"
+
+#ifndef TOYRAFT_RAFTSERVER_H
+#define TOYRAFT_RAFTSERVER_H
 
 namespace ToyRaft {
     class OuterServiceImpl : public ::ToyRaft::OutSideService::Service {
