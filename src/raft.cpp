@@ -160,6 +160,7 @@ namespace ToyRaft {
         state = Status::FOLLOWER;
         currentLeaderId = leaderId;
         currentTerm = term;
+        electionTick = 0;
         return ret;
     }
 

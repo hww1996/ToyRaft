@@ -37,11 +37,13 @@ include_directories(include ${PROTOBUF_INCLUDE_DIRS} ${proto_include} ${RapidJSO
 
 add_library(ToyRaft STATIC ${toyraft_src} ${proto_src} ${grpc_src})
 
-target_link_libraries(ToyRaft pthread ${PROTOBUF_LIBRARIES} grpc)
+target_link_libraries(ToyRaft grpc++ grpc pthread ${PROTOBUF_LIBRARIES})
 
 if(COMPILED_TEST)
     add_executable(logger_test test/logger_test.cpp)
     target_link_libraries(logger_test ToyRaft)
     add_executable(raftconfig_test test/raftconfig_test.cpp)
     target_link_libraries(raftconfig_test ToyRaft)
+    add_executable(raftconnect_test test/raftconnect_test.cpp)
+    target_link_libraries(raftconnect_test ToyRaft )
 endif()
