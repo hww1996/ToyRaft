@@ -38,7 +38,7 @@ namespace ToyRaft {
 
     class Raft {
     public:
-        Raft(const std::string &serverConfigPath);
+        Raft();
 
         int tick();
 

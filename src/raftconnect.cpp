@@ -3,6 +3,7 @@
 //
 
 #include <memory>
+#include <unordered_map>
 
 #include <grpc/grpc.h>
 #include <grpcpp/server.h>
@@ -20,7 +21,6 @@ namespace ToyRaft {
 
     std::deque<std::shared_ptr<::ToyRaft::NetData> > RaftNet::recvBuf;
     std::deque<std::shared_ptr<::ToyRaft::NetData> > RaftNet::sendBuf;
-    std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub>> RaftNet::sendIdMapping;
 
     RaftNet::RaftNet() {
         std::thread recvThread(RaftNet::realRecv);
@@ -100,6 +100,7 @@ namespace ToyRaft {
 
     int RaftNet::realSend() {
         int ret = 0;
+        std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub>> sendIdMapping;
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
             std::shared_ptr<NetData> netData = nullptr;

@@ -38,7 +38,6 @@ namespace ToyRaft {
 
         static int getReadBuffer(::ToyRaft::ServerQueryMsg &serverQueryMsg, int from, int to, int commit);
 
-        std::string raftConfigPath_;
         static std::deque<::ToyRaft::RaftClientMsg> requestBuf;
         static std::vector<std::string> readBuffer;
 

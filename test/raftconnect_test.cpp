@@ -10,9 +10,13 @@
 #include "logger.h"
 #include "raft.pb.h"
 
-int main() {
-    ToyRaft::RaftConfig c("../conf/raft.json");
-    ToyRaft::RaftNet raftNet;
+int main(int argc, char **argv) {
+    if (2 != argc) {
+        std::cout << "usage: <script> <path to config>" << std::endl;
+        exit(-1);
+    }
+    ToyRaft::RaftConfig c(argv[1]);
+    ToyRaft::RaftNet rn;
     std::string buf;
     int id;
     while (true) {
@@ -44,11 +48,13 @@ int main() {
         }
         int ret = 0;
         ToyRaft::AllSend result;
-        while(0 != ToyRaft::RaftNet::recvFromNet(&result)) {
+        while (0 != ToyRaft::RaftNet::recvFromNet(&result)) {
             auto entriesArray = result.requestappend().entries();
             for (int i = 0; i < entriesArray.size(); i++) {
                 ToyRaft::LOGDEBUG("id:%d, index:%d, content:%s ", result.sendfrom(), i, entriesArray[i].buf().c_str());
             }
         }
     }
+    ToyRaft::LOGDEBUG("I am exit.");
+    return 0;
 }

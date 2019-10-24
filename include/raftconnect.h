@@ -6,13 +6,8 @@
 #include <string>
 #include <thread>
 #include <mutex>
-#include <unordered_map>
 #include <memory>
 
-#include <grpc/grpc.h>
-#include <grpcpp/server.h>
-#include <grpcpp/server_builder.h>
-#include <grpcpp/server_context.h>
 
 #include "raft.pb.h"
 #include "raft.grpc.pb.h"
@@ -49,7 +44,6 @@ namespace ToyRaft {
 
         static std::deque<std::shared_ptr<::ToyRaft::NetData> > recvBuf;
         static std::deque<std::shared_ptr<::ToyRaft::NetData> > sendBuf;
-        static std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub>> sendIdMapping;
 
         friend ServerRaftImpl;
     };

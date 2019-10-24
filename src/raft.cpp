@@ -49,7 +49,7 @@ namespace ToyRaft {
                                                                                     matchIndex(peersMatchIndex),
                                                                                     isVoteForMe(false) {}
 
-    Raft::Raft(const std::string &serverConfigPath) : log(std::vector<::ToyRaft::RaftLog>()),
+    Raft::Raft() : log(std::vector<::ToyRaft::RaftLog>()),
                                                       nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
         auto nodesConfigMap = RaftConfig::getNodes();
         id = RaftConfig::getId();
