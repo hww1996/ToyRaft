@@ -101,16 +101,18 @@ namespace ToyRaft {
     int RaftNet::realSend() {
         int ret = 0;
         while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            auto nowNodesConfig = RaftConfig::getNodes();
-            insertConnectPool(sendIdMapping, nowNodesConfig, RaftConfig::getId());
+            std::this_thread::sleep_for(std::chrono::seconds(5));
             std::shared_ptr<NetData> netData = nullptr;
             {
                 std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::sendBufMutex);
+                if (sendBuf.empty()) {
+                    continue;
+                }
                 netData = sendBuf.front();
                 sendBuf.pop_front();
             }
-
+            auto nowNodesConfig = RaftConfig::getNodes();
+            insertConnectPool(sendIdMapping, nowNodesConfig, RaftConfig::getId());
             if (sendIdMapping.end() == sendIdMapping.find(netData->id_)) {
                 continue;
             }

@@ -17,6 +17,7 @@
 
 namespace ToyRaft {
     class OuterServiceImpl : public ::ToyRaft::OutSideService::Service {
+    public:
         ::grpc::Status serverOutSide(::grpc::ServerContext *context, const ::ToyRaft::RaftClientMsg *request,
                                      ::ToyRaft::RaftServerMsg *response);
     };
