@@ -1,6 +1,13 @@
 //
 // Created by hww1996 on 2019/10/13.
 //
+#include <grpc/grpc.h>
+#include <grpcpp/server.h>
+#include <grpcpp/server_builder.h>
+#include <grpcpp/server_context.h>
+#include <grpcpp/create_channel.h>
+#include <grpcpp/security/credentials.h>
+
 #include "raftserver.h"
 #include "globalmutext.h"
 #include "raft.h"
@@ -63,6 +70,8 @@ namespace ToyRaft {
             default:
                 response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                 break;
+            case RaftClientMsg_QueryType_RaftClientMsg_QueryType_INT_MIN_SENTINEL_DO_NOT_USE_:break;
+            case RaftClientMsg_QueryType_RaftClientMsg_QueryType_INT_MAX_SENTINEL_DO_NOT_USE_:break;
         }
         return sta;
     }
@@ -70,7 +79,7 @@ namespace ToyRaft {
     std::deque<::ToyRaft::RaftClientMsg> RaftServer::requestBuf;
     std::vector<std::string> RaftServer::readBuffer;
 
-    RaftServer::RaftServer(const std::string &raftConfigPath) : raftConfigPath_(raftConfigPath) {
+    RaftServer::RaftServer(const std::string &raftConfigPath) {
         RaftConfig cs(raftConfigPath);
         RaftNet r;
         std::thread t(recvFromNet);
@@ -112,11 +121,11 @@ namespace ToyRaft {
 
     int RaftServer::serverForever() {
         int ret = 0;
-        Raft raft(raftConfigPath_);
+        Raft raft;
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             ret = raft.tick();
-            if (ret != 0) {
+            if (0 != ret) {
                 break;
             }
         }
