@@ -28,6 +28,7 @@ namespace ToyRaft {
     };
 
     class ServerRaftImpl final : public ::ToyRaft::SendAndReply::Service {
+    public:
         ::grpc::Status serverRaft(::grpc::ServerContext *context, const ::ToyRaft::AllSend *request,
                                   ::ToyRaft::ServerSendBack *response);
     };
