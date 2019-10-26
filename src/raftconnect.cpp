@@ -105,17 +105,15 @@ namespace ToyRaft {
         std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub>> sendIdMapping;
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
-            int sendBufCount = 0;
             {
                 std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::sendBufMutex);
                 if (sendBuf.empty()) {
                     continue;
                 }
-                sendBufCount = sendBuf.size();
             }
             auto nowNodesConfig = RaftConfig::getNodes();
             insertConnectPool(sendIdMapping, nowNodesConfig, RaftConfig::getId());
-            while (sendBufCount--) {
+            while (true) {
                 std::shared_ptr<NetData> netData = nullptr;
                 {
                     std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::sendBufMutex);
