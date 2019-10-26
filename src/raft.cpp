@@ -50,7 +50,7 @@ namespace ToyRaft {
                                                                                     isVoteForMe(false) {}
 
     Raft::Raft() : log(std::vector<::ToyRaft::RaftLog>()),
-                                                      nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
+                   nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
         auto nodesConfigMap = RaftConfig::getNodes();
         id = RaftConfig::getId();
         currentTerm = -1;
@@ -185,7 +185,9 @@ namespace ToyRaft {
                     ::ToyRaft::AllSend allSend;
                     allSend.set_sendfrom(id);
                     allSend.set_sendtype(::ToyRaft::AllSend::REQVOTE);
-                    allSend.set_allocated_requestvote(&requestVote);
+                    std::string requestVoteBuf;
+                    requestVote.SerializeToString(&requestVoteBuf);
+                    allSend.set_sendbuf(requestVoteBuf.c_str(), requestVoteBuf.size());
                     ret = RaftNet::sendToNet(nodeIter->second->id, allSend);
                 }
                 if (0 != ret) {
@@ -247,7 +249,9 @@ namespace ToyRaft {
                     ::ToyRaft::AllSend allSend;
                     allSend.set_sendfrom(id);
                     allSend.set_sendtype(::ToyRaft::AllSend::REQAPPEND);
-                    allSend.set_allocated_requestappend(&requestAppend);
+                    std::string requestAppendBuf;
+                    requestAppend.SerializeToString(&requestAppendBuf);
+                    allSend.set_sendbuf(requestAppendBuf.c_str(), requestAppendBuf.size());
                     ret = RaftNet::sendToNet(nodeIter->second->id, allSend);
                 }
                 if (0 != ret) {
@@ -309,7 +313,9 @@ namespace ToyRaft {
         ::ToyRaft::AllSend requestVoteRsp;
         requestVoteRsp.set_sendfrom(id);
         requestVoteRsp.set_sendtype(::ToyRaft::AllSend::VOTERSP);
-        requestVoteRsp.set_allocated_requestvoteresponse(&voteRspMsg);
+        std::string voteRspMsgBuf;
+        voteRspMsg.SerializeToString(&voteRspMsgBuf);
+        requestVoteRsp.set_sendbuf(voteRspMsgBuf.c_str(), voteRspMsgBuf.size());
         ret = RaftNet::sendToNet(requestVote.candidateid(), requestVoteRsp);
         return ret;
     }
@@ -404,7 +410,9 @@ namespace ToyRaft {
         appendRsp.set_sentbackid(id);
         requestAppendRsp.set_sendfrom(id);
         requestAppendRsp.set_sendtype(::ToyRaft::AllSend::APPENDRSP);
-        requestAppendRsp.set_allocated_requestappendresponse(&appendRsp);
+        std::string appendRspBuf;
+        appendRsp.SerializeToString(&appendRspBuf);
+        requestAppendRsp.set_sendbuf(appendRspBuf.c_str(), appendRspBuf.size());
         ret = RaftNet::sendToNet(requestAppend.currentleaderid(), requestAppendRsp);
         return ret;
     }
@@ -482,18 +490,30 @@ namespace ToyRaft {
                 break;
             }
             switch (allSend.sendtype()) {
-                case ::ToyRaft::AllSend::REQVOTE:
-                    ret = handleRequestVote(allSend.requestvote(), allSend.sendfrom());
+                case ::ToyRaft::AllSend::REQVOTE: {
+                    RequestVote requestVote;
+                    requestVote.ParseFromString(allSend.sendbuf());
+                    ret = handleRequestVote(requestVote, allSend.sendfrom());
+                }
                     break;
-                case ::ToyRaft::AllSend::VOTERSP:
-                    ret = handleRequestVoteResponse(allSend.requestvoteresponse(), allSend.sendfrom());
+                case ::ToyRaft::AllSend::VOTERSP: {
+                    RequestVoteResponse requestVoteResponse;
+                    requestVoteResponse.ParseFromString(allSend.sendbuf());
+                    ret = handleRequestVoteResponse(requestVoteResponse, allSend.sendfrom());
+                }
                     break;
-                case ::ToyRaft::AllSend::REQAPPEND:
-                    ret = handleRequestAppend(allSend.requestappend(), allSend.sendfrom());
+                case ::ToyRaft::AllSend::REQAPPEND: {
+                    RequestAppend requestAppend;
+                    requestAppend.ParseFromString(allSend.sendbuf());
+                    ret = handleRequestAppend(requestAppend, allSend.sendfrom());
                     heartBeatTick = 0;
+                }
                     break;
-                case ::ToyRaft::AllSend::APPENDRSP:
-                    ret = handleRequestAppendResponse(allSend.requestappendresponse(), allSend.sendfrom());
+                case ::ToyRaft::AllSend::APPENDRSP: {
+                    RequestAppendResponse requestAppendResponse;
+                    requestAppendResponse.ParseFromString(allSend.sendbuf());
+                    ret = handleRequestAppendResponse(requestAppendResponse, allSend.sendfrom());
+                }
                     break;
                 default:
                     break;

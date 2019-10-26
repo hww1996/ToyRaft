@@ -52,10 +52,7 @@ message AllSend {
     }
     int64 sendFrom = 1;
     SendType sendType = 2;
-    RequestVote requestVote = 3;
-    RequestVoteResponse requestVoteResponse = 4;
-    RequestAppend requestAppend = 5;
-    RequestAppendResponse requestAppendResponse = 6;
+    bytes sendBuf = 3;
 }
 
 message ServerSendBack {
