@@ -125,16 +125,13 @@ namespace ToyRaft {
 
     int RaftServer::getNetLogs(std::vector<std::string> &netLog) {
         int ret = 0;
-        int requestBufCount = 0;
-        {
-            std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
-            requestBufCount = requestBuf.size();
-        }
-        while (requestBufCount > 0) {
+        while (true) {
             ClientAppendMsg clientAppendMsg;
-            requestBufCount--;
             {
                 std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
+                if (requestBuf.empty()) {
+                    break;
+                }
                 clientAppendMsg.ParseFromString(requestBuf.front().clientbuf());
                 requestBuf.pop_front();
             }
