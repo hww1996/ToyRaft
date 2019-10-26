@@ -35,7 +35,10 @@ namespace ToyRaft {
                         ServerRedirectMsg sendRedirectMsg;
                         sendRedirectMsg.set_ip(nodes[currentLeaderId]->ip_);
                         sendRedirectMsg.set_port(nodes[currentLeaderId]->port_);
-                        response->set_allocated_serverredirectmsg(&sendRedirectMsg);
+
+                        std::string sendRedirectMsgBuf;
+                        sendRedirectMsg.SerializeToString(&sendRedirectMsgBuf);
+                        response->set_serverbuf(sendRedirectMsgBuf.c_str(), sendRedirectMsgBuf.size());
                         return sta;
                     }
                     case CANDIDATE: {
@@ -56,22 +59,25 @@ namespace ToyRaft {
                     }
                 }
             case ::ToyRaft::RaftClientMsg::QUERY: {
+                ClientQueryMsg clientQueryMsg;
+                clientQueryMsg.ParseFromString(request->clientbuf());
+
                 ServerQueryMsg serverQueryMsg;
-                auto &clientQueryMsg = request->clientquerymsg();
                 ret = RaftServer::getReadBuffer(serverQueryMsg, clientQueryMsg.startindex(), clientQueryMsg.endindex(),
                                                 commitIndex);
                 if (0 != ret) {
                     response->set_sendbacktype(RaftServerMsg::RETRY);
                     return sta;
                 }
+
                 response->set_sendbacktype(RaftServerMsg::OK);
-                response->set_allocated_serverquerymsg(&serverQueryMsg);
+                std::string serverQueryMsgBuf;
+                serverQueryMsg.SerializeToString(&serverQueryMsgBuf);
+                response->set_serverbuf(serverQueryMsgBuf.c_str(), serverQueryMsgBuf.size());
             }
             default:
                 response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                 break;
-            case RaftClientMsg_QueryType_RaftClientMsg_QueryType_INT_MIN_SENTINEL_DO_NOT_USE_:break;
-            case RaftClientMsg_QueryType_RaftClientMsg_QueryType_INT_MAX_SENTINEL_DO_NOT_USE_:break;
         }
         return sta;
     }
@@ -84,6 +90,19 @@ namespace ToyRaft {
         RaftNet r;
         std::thread t(recvFromNet);
         t.detach();
+    }
+
+    int RaftServer::serverForever() {
+        int ret = 0;
+        Raft raft;
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            ret = raft.tick();
+            if (0 != ret) {
+                break;
+            }
+        }
+        return ret;
     }
 
     static void initOuterServer(int port) {
@@ -106,27 +125,22 @@ namespace ToyRaft {
 
     int RaftServer::getNetLogs(std::vector<std::string> &netLog) {
         int ret = 0;
+        int requestBufCount = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
-            while (!requestBuf.empty()) {
-                auto Logs = requestBuf.front().clientappendmsg().appendlog();
-                for (auto &Log : Logs) {
-                    netLog.emplace_back(Log.c_str(), Log.size());
-                }
+            requestBufCount = requestBuf.size();
+        }
+        while (requestBufCount > 0) {
+            ClientAppendMsg clientAppendMsg;
+            requestBufCount--;
+            {
+                std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
+                clientAppendMsg.ParseFromString(requestBuf.front().clientbuf());
                 requestBuf.pop_front();
             }
-        }
-        return ret;
-    }
-
-    int RaftServer::serverForever() {
-        int ret = 0;
-        Raft raft;
-        while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            ret = raft.tick();
-            if (0 != ret) {
-                break;
+            auto Logs = clientAppendMsg.appendlog();
+            for (auto &Log : Logs) {
+                netLog.emplace_back(Log.c_str(), Log.size());
             }
         }
         return ret;

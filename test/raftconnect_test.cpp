@@ -4,11 +4,31 @@
 
 #include <iostream>
 #include <string>
+#include <thread>
 
 #include "raftconnect.h"
 #include "raftconfig.h"
 #include "logger.h"
 #include "raft.pb.h"
+
+void threadFunc() {
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        ToyRaft::AllSend result;
+        while (0 != ToyRaft::RaftNet::recvFromNet(&result)) {
+            ToyRaft::RequestAppend requestAppendRecv;
+            requestAppendRecv.ParseFromString(result.sendbuf());
+            auto entriesArray = requestAppendRecv.entries();
+            if (0 == entriesArray.size()) {
+                ToyRaft::LOGNOTICE("id:%d, sendType:%d", result.sendfrom(), result.sendtype());
+            }
+            for (int i = 0; i < entriesArray.size(); i++) {
+                ToyRaft::LOGNOTICE("id:%d, sendType:%d, index:%d, content:%s ", result.sendfrom(), result.sendtype(), i,
+                                   entriesArray[i].buf().c_str());
+            }
+        }
+    }
+}
 
 int main(int argc, char **argv) {
     if (2 != argc) {
@@ -17,14 +37,16 @@ int main(int argc, char **argv) {
     }
     ToyRaft::RaftConfig c(argv[1]);
     ToyRaft::RaftNet rn;
+    std::thread t(threadFunc);
+    t.detach();
     std::string buf;
-    int id;
+    int getType = 0;
     while (true) {
-        std::cin >> id;
-        std::cin >> buf;
-        if (id == 0) {
+        std::cin >> getType;
+        if (std::cin.eof()) {
             break;
         }
+        std::cin >> buf;
         if (std::cin.eof()) {
             break;
         }
@@ -37,22 +59,22 @@ int main(int argc, char **argv) {
         requestAppend.set_prelogindex(-1);
         requestAppend.set_prelogterm(-1);
         requestAppend.set_leadercommit(-1);
-        auto log = requestAppend.add_entries();
-        log->set_term(-1);
-        log->set_type(ToyRaft::RaftLog::APPEND);
-        log->set_buf(buf);
-        allSend.set_allocated_requestappend(&requestAppend);
+
+        if (getType == 1) {
+            ToyRaft::LOGDEBUG("don't need empty.");
+            auto log = requestAppend.add_entries();
+            log->set_term(-1);
+            log->set_type(ToyRaft::RaftLog::APPEND);
+            log->set_buf(buf);
+        }
+
+        std::string requestAppendBuf;
+        requestAppend.SerializeToString(&requestAppendBuf);
+        allSend.set_sendbuf(requestAppendBuf.c_str(), requestAppendBuf.size());
+
         auto nodes = ToyRaft::RaftConfig::getNodes();
         for (auto nodeIt = nodes.begin(); nodeIt != nodes.end(); ++nodeIt) {
             ToyRaft::RaftNet::sendToNet(nodeIt->first, allSend);
-        }
-        int ret = 0;
-        ToyRaft::AllSend result;
-        while (0 != ToyRaft::RaftNet::recvFromNet(&result)) {
-            auto entriesArray = result.requestappend().entries();
-            for (int i = 0; i < entriesArray.size(); i++) {
-                ToyRaft::LOGDEBUG("id:%d, index:%d, content:%s ", result.sendfrom(), i, entriesArray[i].buf().c_str());
-            }
         }
     }
     ToyRaft::LOGDEBUG("I am exit.");

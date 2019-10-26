@@ -15,6 +15,7 @@
 #include "raftconnect.h"
 #include "globalmutext.h"
 #include "raftconfig.h"
+#include "logger.h"
 
 namespace ToyRaft {
     NetData::NetData(int64_t id, const ::ToyRaft::AllSend &allSend) : id_(id), buf_(allSend) {}
@@ -53,14 +54,15 @@ namespace ToyRaft {
     }
 
     static int insertConnectPool(std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub> > &sendMap,
-                                std::unordered_map<int, std::shared_ptr<NodeConfig> > &nodesConfig, int id) {
+                                 std::unordered_map<int, std::shared_ptr<NodeConfig> > &nodesConfig, int id) {
         int ret = 0;
         for (auto nodeIt = nodesConfig.begin(); nodesConfig.end() != nodeIt; ++nodeIt) {
             if (nodeIt->first == id) {
                 continue;
             }
             if (sendMap.end() == sendMap.find(nodeIt->first)) {
-                std::string serverIPPort = nodeIt->second->ip_ + std::to_string(nodeIt->second->port_);
+                std::string serverIPPort = nodeIt->second->ip_ + ":" +std::to_string(nodeIt->second->port_);
+                LOGDEBUG("id:%d,name:%s",nodeIt->first, serverIPPort.c_str());
                 sendMap[nodeIt->first] = std::move(::ToyRaft::SendAndReply::NewStub(
                         grpc::CreateChannel(serverIPPort, grpc::InsecureChannelCredentials())));
             }
@@ -102,24 +104,39 @@ namespace ToyRaft {
         int ret = 0;
         std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub>> sendIdMapping;
         while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            std::shared_ptr<NetData> netData = nullptr;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            int sendBufCount = 0;
             {
                 std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::sendBufMutex);
                 if (sendBuf.empty()) {
                     continue;
                 }
-                netData = sendBuf.front();
-                sendBuf.pop_front();
+                sendBufCount = sendBuf.size();
             }
             auto nowNodesConfig = RaftConfig::getNodes();
             insertConnectPool(sendIdMapping, nowNodesConfig, RaftConfig::getId());
-            if (sendIdMapping.end() == sendIdMapping.find(netData->id_)) {
-                continue;
+            while (sendBufCount--) {
+                std::shared_ptr<NetData> netData = nullptr;
+                {
+                    std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::sendBufMutex);
+                    if (sendBuf.empty()) {
+                        break;
+                    }
+                    netData = sendBuf.front();
+                    sendBuf.pop_front();
+                }
+                if (sendIdMapping.end() == sendIdMapping.find(netData->id_)) {
+                    continue;
+                }
+                ::ToyRaft::ServerSendBack sendBack;
+                grpc::ClientContext context;
+                ::grpc::Status sta = sendIdMapping[netData->id_]->serverRaft(&context, netData->buf_, &sendBack);
+                if (!sta.ok()) {
+                    LOGDEBUG("error messge:%s", sta.error_message().c_str());
+                } else {
+                    LOGDEBUG("send OK");
+                }
             }
-            ::ToyRaft::ServerSendBack sendBack;
-            grpc::ClientContext context;
-            sendIdMapping[netData->id_]->serverRaft(&context, netData->buf_, &sendBack);
         }
         return ret;
     }

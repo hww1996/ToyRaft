@@ -12,11 +12,11 @@ namespace ToyRaft {
         static void LogLevel(int level, const char *fileName, const char *functionName, int line, const char *fmt, ...);
     };
 
-#define LOGERROR(fmt, args...) Logger::LogLevel(1, __FILE__, __FUNCTION__, __LINE__, fmt, ##args);
-#define LOGWARING(fmt, args...) Logger::LogLevel(2, __FILE__, __FUNCTION__, __LINE__, fmt, ##args);
-#define LOGNOTICE(fmt, args...) Logger::LogLevel(3, __FILE__, __FUNCTION__, __LINE__, fmt, ##args);
-#define LOGDEBUG(fmt, args...) Logger::LogLevel(4, __FILE__, __FUNCTION__, __LINE__, fmt, ##args);
-#define LOGINFO(fmt, args...) Logger::LogLevel(5, __FILE__, __FUNCTION__, __LINE__, fmt, ##args);
+#define LOGERROR(fmt, args...) Logger::LogLevel(1, __FILE__, __FUNCTION__, __LINE__, fmt, ##args)
+#define LOGWARING(fmt, args...) Logger::LogLevel(2, __FILE__, __FUNCTION__, __LINE__, fmt, ##args)
+#define LOGNOTICE(fmt, args...) Logger::LogLevel(3, __FILE__, __FUNCTION__, __LINE__, fmt, ##args)
+#define LOGDEBUG(fmt, args...) Logger::LogLevel(4, __FILE__, __FUNCTION__, __LINE__, fmt, ##args)
+#define LOGINFO(fmt, args...) Logger::LogLevel(5, __FILE__, __FUNCTION__, __LINE__, fmt, ##args)
 
 } // namespace ToyRaft
 #endif //TOYRAFT_LOGGER_H

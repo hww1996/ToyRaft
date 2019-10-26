@@ -42,16 +42,16 @@ namespace ToyRaft {
     }
 
     static void clearNodesConf(std::unordered_map<int, std::shared_ptr<NodeConfig> > &config) {
-        LOGDEBUG("clear the config OK.")
+        LOGDEBUG("clear the config OK.");
         for (auto configIt = config.begin(); config.end() != configIt;) {
             config.erase(configIt++);
         }
     }
 
     void RaftConfig::loadConfigWrap() {
-        LOGDEBUG("start load config")
+        LOGDEBUG("start load config");
         while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::this_thread::sleep_for(std::chrono::seconds(3*86400));
             if (0 != loadConfig()) {
                 break;
             }
@@ -59,7 +59,7 @@ namespace ToyRaft {
     }
 
     int RaftConfig::loadConfig() {
-        LOGDEBUG("loading the config")
+        LOGDEBUG("loading the config");
         int ret = 0;
 
         // 这里需要采取rename的方式写入文件，因为rename在操作系统层面是原子操作
@@ -70,7 +70,7 @@ namespace ToyRaft {
         std::string jsonData(beg, end);
         file.close();
 
-        LOGDEBUG("loading the file OK")
+        LOGDEBUG("loading the file OK");
         LOGDEBUG("before change.nowBufIndex: %d", nowBufIndex.load());
 
         int secondConfIndex = 1 - nowBufIndex.load();
