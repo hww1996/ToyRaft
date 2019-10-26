@@ -21,8 +21,7 @@ message RaftClientMsg {
         QUERY = 1;
     }
     QueryType queryType = 1;
-    ClientQueryMsg clientQueryMsg = 2;
-    ClientAppendMsg clientAppendMsg = 3;
+    bytes clientBuf = 2;
 }
 
 message ServerRedirectMsg {
@@ -43,6 +42,5 @@ message RaftServerMsg {
         UNKNOWN = 3;
     }
     SendBackType sendBackType = 1;
-    ServerRedirectMsg serverRedirectMsg = 2;
-    ServerQueryMsg serverQueryMsg = 3;
+    bytes serverBuf = 2;
 }
