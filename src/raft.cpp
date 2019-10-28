@@ -11,6 +11,7 @@
 #include "raftconfig.h"
 #include "raftserver.h"
 #include "globalmutext.h"
+#include "logger.h"
 
 namespace ToyRaft {
     static int64_t min(int64_t a, int64_t b) {
@@ -59,18 +60,17 @@ namespace ToyRaft {
         lastAppliedIndex = -1;
         state = Status::FOLLOWER;
 
-        heartBeatTick = 0;
-        heartBeatTick = 0;
+        timeTick = 0;
 
         for (auto nodesConfigIt = nodesConfigMap.begin(); nodesConfigMap.end() != nodesConfigIt; ++nodesConfigIt) {
             nodes[nodesConfigIt->first] = std::make_shared<Peers>(nodesConfigIt->second->id_, 0, -1);
         }
 
+        heartBeatTimeout = 1;
         time_t seed = time(NULL);
         srand(static_cast<unsigned int>(seed));
         int64_t standerElectionTimeOut = heartBeatTimeout * 10;
         electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
-        heartBeatTimeout = 1;
     }
 
     /**
@@ -78,34 +78,25 @@ namespace ToyRaft {
      * @return 返回错误码
      */
     int Raft::tick() {
-
-        heartBeatTick++;
-        electionTick++;
-
+        LOGDEBUG("leader:%d,status:%d,commit:%d,electionTimeout:%d,timeTick:%d,term:%d", currentLeaderId, state,
+                 commitIndex, electionTimeout, timeTick, currentTerm);
         int ret = 0;
 
-        OuterRaftStatus::push(currentLeaderId, state, commitIndex);
+        timeTick++;
 
-        if (electionTick >= electionTimeout) {
+        if (timeTick >= electionTimeout) {
             ret = becomeCandidate();
             if (0 != ret) {
                 return ret;
             }
         }
 
-        // 每隔一段时间接收一次消息
-        ret = recv();
-        if (0 != ret) {
-            return ret;
-        }
-
         if (Status::LEADER == state) {
-            if (heartBeatTick >= heartBeatTimeout) {
-                commit();
-                ret = sendRequestAppend();
-                if (0 != ret) {
-                    return ret;
-                }
+            timeTick = 0;
+            commit();
+            ret = sendRequestAppend();
+            if (0 != ret) {
+                return ret;
             }
         } else if (Status::CANDIDATE == state) {
             ret = sendRequestVote();
@@ -114,7 +105,14 @@ namespace ToyRaft {
             }
         }
 
+        // 每隔一段时间接收一次消息
+        ret = recvInnerMsg();
+        if (0 != ret) {
+            return ret;
+        }
+
         RaftServer::pushReadBuffer(log);
+        OuterRaftStatus::push(currentLeaderId, state, commitIndex);
 
         return ret;
     }
@@ -147,9 +145,10 @@ namespace ToyRaft {
         }
         nodes[id]->isVoteForMe = true;
 
-        time_t seed = time(NULL);
+        time_t seed = time(0);
         srand(static_cast<unsigned int>(seed));
-        int64_t standerElectionTimeOut = heartBeatTimeout * 10;
+        int standerElectionTimeOut = heartBeatTimeout * 10;
+        timeTick = 0;
         electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
         ret = sendRequestVote();
         return ret;
@@ -160,7 +159,7 @@ namespace ToyRaft {
         state = Status::FOLLOWER;
         currentLeaderId = leaderId;
         currentTerm = term;
-        electionTick = 0;
+        timeTick = 0;
         return ret;
     }
 
@@ -270,30 +269,46 @@ namespace ToyRaft {
     int Raft::handleRequestVote(const ::ToyRaft::RequestVote &requestVote, int64_t sendFrom) {
         int ret = 0;
         ::ToyRaft::RequestVoteResponse voteRspMsg;
-        // 以前的任期已经投过票了，所以不投给他
-        if (currentTerm >= requestVote.term()) {
-            voteRspMsg.set_term(currentTerm);
-            voteRspMsg.set_voteforme(false);
-        }
-            // 假设他的任期更大，那么比较日志那个更新
-        else {
-            const ::ToyRaft::RaftLog &lastApplied = log[lastAppliedIndex];
-            // 首先比较的是最后提交的日志的任期
-            // 投票请求的最后提交的日志的任期小于当前日志的最后任期
-            // 那么不投票给他
-            if (lastApplied.term() > requestVote.lastlogterm()) {
+        do {
+            // 以前的任期已经投过票了，所以不投给他
+            if (currentTerm >= requestVote.term()) {
                 voteRspMsg.set_term(currentTerm);
                 voteRspMsg.set_voteforme(false);
             }
-                // 投票请求的最后提交的日志的任期等于当前日志的最后任期
-                // 那么比较应用到状态机的日志index
-            else if (lastApplied.term() == requestVote.lastlogterm()) {
-                // 假如当前应用到状态机的index比投票请求的大
+                // 假设他的任期更大，那么比较日志那个更新
+            else {
+                if (lastAppliedIndex == -1) {
+                    becomeFollower(requestVote.term(), requestVote.candidateid());
+                    voteRspMsg.set_term(currentTerm);
+                    voteRspMsg.set_voteforme(true);
+                    break;
+                }
+                const ::ToyRaft::RaftLog &lastApplied = log[lastAppliedIndex];
+                // 首先比较的是最后提交的日志的任期
+                // 投票请求的最后提交的日志的任期小于当前日志的最后任期
                 // 那么不投票给他
-                if (lastAppliedIndex > requestVote.lastlogindex()) {
+                if (lastApplied.term() > requestVote.lastlogterm()) {
                     voteRspMsg.set_term(currentTerm);
                     voteRspMsg.set_voteforme(false);
-                } else {
+                }
+                    // 投票请求的最后提交的日志的任期等于当前日志的最后任期
+                    // 那么比较应用到状态机的日志index
+                else if (lastApplied.term() == requestVote.lastlogterm()) {
+                    // 假如当前应用到状态机的index比投票请求的大
+                    // 那么不投票给他
+                    if (lastAppliedIndex > requestVote.lastlogindex()) {
+                        voteRspMsg.set_term(currentTerm);
+                        voteRspMsg.set_voteforme(false);
+                    } else {
+                        // 投票给候选者，并把自己的状态变为follower，
+                        // 设置当前任期和投票给的人
+                        becomeFollower(requestVote.term(), requestVote.candidateid());
+                        voteRspMsg.set_term(currentTerm);
+                        voteRspMsg.set_voteforme(true);
+                    }
+                }
+                    // 投票请求的最后提交的日志的大于等于当前日志的最后任期
+                else {
                     // 投票给候选者，并把自己的状态变为follower，
                     // 设置当前任期和投票给的人
                     becomeFollower(requestVote.term(), requestVote.candidateid());
@@ -301,15 +316,8 @@ namespace ToyRaft {
                     voteRspMsg.set_voteforme(true);
                 }
             }
-                // 投票请求的最后提交的日志的大于等于当前日志的最后任期
-            else {
-                // 投票给候选者，并把自己的状态变为follower，
-                // 设置当前任期和投票给的人
-                becomeFollower(requestVote.term(), requestVote.candidateid());
-                voteRspMsg.set_term(currentTerm);
-                voteRspMsg.set_voteforme(true);
-            }
-        }
+        } while (false);
+        LOGDEBUG("I am here.");
         ::ToyRaft::AllSend requestVoteRsp;
         requestVoteRsp.set_sendfrom(id);
         requestVoteRsp.set_sendtype(::ToyRaft::AllSend::VOTERSP);
@@ -333,7 +341,7 @@ namespace ToyRaft {
         if (requestVoteResponse.term() == currentTerm && requestVoteResponse.voteforme()) {
             nodes[sendFrom]->isVoteForMe = true;
         }
-        int voteCount = 0;
+        int voteCount = 1;
         for (auto nodesIt = nodes.begin(); nodes.end() != nodesIt; ++nodesIt) {
             if (nodesIt->second->isVoteForMe) {
                 voteCount++;
@@ -481,7 +489,7 @@ namespace ToyRaft {
      *
      * @return
      */
-    int Raft::recv() {
+    int Raft::recvInnerMsg() {
         int ret = 0;
         while (true) {
             ::ToyRaft::AllSend allSend;
@@ -491,28 +499,35 @@ namespace ToyRaft {
             }
             switch (allSend.sendtype()) {
                 case ::ToyRaft::AllSend::REQVOTE: {
+                    LOGDEBUG("recv the reqvote.");
                     RequestVote requestVote;
                     requestVote.ParseFromString(allSend.sendbuf());
+                    LOGDEBUG("deal with reqvote.");
                     ret = handleRequestVote(requestVote, allSend.sendfrom());
                 }
                     break;
                 case ::ToyRaft::AllSend::VOTERSP: {
+                    LOGDEBUG("recv the votersp.");
                     RequestVoteResponse requestVoteResponse;
                     requestVoteResponse.ParseFromString(allSend.sendbuf());
                     ret = handleRequestVoteResponse(requestVoteResponse, allSend.sendfrom());
+                    LOGDEBUG("deal with votersp.");
                 }
                     break;
                 case ::ToyRaft::AllSend::REQAPPEND: {
+                    LOGDEBUG("recv the reqappend.");
                     RequestAppend requestAppend;
                     requestAppend.ParseFromString(allSend.sendbuf());
                     ret = handleRequestAppend(requestAppend, allSend.sendfrom());
-                    heartBeatTick = 0;
+                    LOGDEBUG("deal with reqappend.");
                 }
                     break;
                 case ::ToyRaft::AllSend::APPENDRSP: {
+                    LOGDEBUG("recv the appendrsp.");
                     RequestAppendResponse requestAppendResponse;
                     requestAppendResponse.ParseFromString(allSend.sendbuf());
                     ret = handleRequestAppendResponse(requestAppendResponse, allSend.sendfrom());
+                    LOGDEBUG("deal with appendrsp.");
                 }
                     break;
                 default:

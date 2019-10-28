@@ -53,30 +53,6 @@ namespace ToyRaft {
         server->Wait();
     }
 
-    static int insertConnectPool(std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub> > &sendMap,
-                                 std::unordered_map<int, std::shared_ptr<NodeConfig> > &nodesConfig, int id) {
-        int ret = 0;
-        for (auto nodeIt = nodesConfig.begin(); nodesConfig.end() != nodeIt; ++nodeIt) {
-            if (nodeIt->first == id) {
-                continue;
-            }
-            if (sendMap.end() == sendMap.find(nodeIt->first)) {
-                std::string serverIPPort = nodeIt->second->ip_ + ":" +std::to_string(nodeIt->second->port_);
-                LOGDEBUG("id:%d,name:%s",nodeIt->first, serverIPPort.c_str());
-                sendMap[nodeIt->first] = std::move(::ToyRaft::SendAndReply::NewStub(
-                        grpc::CreateChannel(serverIPPort, grpc::InsecureChannelCredentials())));
-            }
-        }
-        for (auto sendMapIt = sendMap.begin(); sendMap.end() != sendMapIt;) {
-            if (nodesConfig.find(sendMapIt->first) == nodesConfig.end()) {
-                sendMap.erase(sendMapIt++);
-                continue;
-            }
-            ++sendMapIt;
-        }
-        return ret;
-    }
-
     int RaftNet::sendToNet(int64_t id, ::ToyRaft::AllSend &allSend) {
         int ret = 0;
         std::shared_ptr<NetData> netData = std::shared_ptr<NetData>(new NetData(id, allSend));
@@ -102,9 +78,8 @@ namespace ToyRaft {
 
     int RaftNet::realSend() {
         int ret = 0;
-        std::unordered_map<int, std::unique_ptr<::ToyRaft::SendAndReply::Stub>> sendIdMapping;
         while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             {
                 std::lock_guard<std::mutex> lock(::ToyRaft::GlobalMutex::sendBufMutex);
                 if (sendBuf.empty()) {
@@ -112,7 +87,6 @@ namespace ToyRaft {
                 }
             }
             auto nowNodesConfig = RaftConfig::getNodes();
-            insertConnectPool(sendIdMapping, nowNodesConfig, RaftConfig::getId());
             while (true) {
                 std::shared_ptr<NetData> netData = nullptr;
                 {
@@ -123,17 +97,25 @@ namespace ToyRaft {
                     netData = sendBuf.front();
                     sendBuf.pop_front();
                 }
-                if (sendIdMapping.end() == sendIdMapping.find(netData->id_)) {
+                if (RaftConfig::getId() == netData->id_) {
                     continue;
                 }
+                if (nowNodesConfig.end() == nowNodesConfig.find(netData->id_)) {
+                    continue;
+                }
+                std::string serverIPPort =
+                        nowNodesConfig[netData->id_]->ip_ + ":" + std::to_string(nowNodesConfig[netData->id_]->port_);
+                std::unique_ptr<::ToyRaft::SendAndReply::Stub> clientPtr(std::move(::ToyRaft::SendAndReply::NewStub(
+                        grpc::CreateChannel(serverIPPort, grpc::InsecureChannelCredentials()))));
                 ::ToyRaft::ServerSendBack sendBack;
                 grpc::ClientContext context;
-                ::grpc::Status sta = sendIdMapping[netData->id_]->serverRaft(&context, netData->buf_, &sendBack);
+                ::grpc::Status sta = clientPtr->serverRaft(&context, netData->buf_, &sendBack);
                 if (!sta.ok()) {
                     LOGDEBUG("error messge:%s", sta.error_message().c_str());
                 } else {
                     LOGDEBUG("send OK");
                 }
+                clientPtr.reset(nullptr);
             }
         }
         return ret;
