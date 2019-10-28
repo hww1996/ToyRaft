@@ -46,5 +46,6 @@ if(COMPILED_TEST)
     target_link_libraries(raftconfig_test ToyRaft)
     add_executable(raftconnect_test test/raftconnect_test.cpp)
     target_link_libraries(raftconnect_test ToyRaft )
-    
+    add_executable(raftserver_test_server test/raftserver_test_server.cpp)
+    target_link_libraries(raftserver_test_server ToyRaft )
 endif()

@@ -41,9 +41,8 @@ namespace ToyRaft {
         Raft();
 
         int tick();
-
     private:
-        int recv();
+        int recvInnerMsg();
 
         // 发送vote请求
         int sendRequestVote();
@@ -84,8 +83,7 @@ namespace ToyRaft {
 
         Status state;
 
-        int heartBeatTick;
-        int electionTick;
+        int timeTick;
 
         std::unordered_map<int64_t, std::shared_ptr<Peers>> nodes;
 
