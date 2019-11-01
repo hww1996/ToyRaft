@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "globalmutext.h"
+#include "globalmutex.h"
 #include "raftconfig.h"
 #include "raftserver.pb.h"
 #include "raft.pb.h"

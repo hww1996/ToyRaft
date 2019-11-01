@@ -10,7 +10,7 @@
 #include "raftconnect.h"
 #include "raftconfig.h"
 #include "raftserver.h"
-#include "globalmutext.h"
+#include "globalmutex.h"
 #include "logger.h"
 
 namespace ToyRaft {
