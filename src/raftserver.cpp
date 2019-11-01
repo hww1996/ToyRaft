@@ -9,7 +9,7 @@
 #include <grpcpp/security/credentials.h>
 
 #include "raftserver.h"
-#include "globalmutext.h"
+#include "globalmutex.h"
 #include "raft.h"
 #include "raftconnect.h"
 

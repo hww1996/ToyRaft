@@ -13,7 +13,7 @@
 #include <grpcpp/security/credentials.h>
 
 #include "raftconnect.h"
-#include "globalmutext.h"
+#include "globalmutex.h"
 #include "raftconfig.h"
 #include "logger.h"
 

@@ -2,7 +2,7 @@
 // Created by hww1996 on 2019/10/8.
 //
 
-#include "globalmutext.h"
+#include "globalmutex.h"
 
 namespace ToyRaft {
 

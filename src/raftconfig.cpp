@@ -10,7 +10,7 @@
 #include <rapidjson/document.h>
 
 #include "raftconfig.h"
-#include "globalmutext.h"
+#include "globalmutex.h"
 #include "logger.h"
 
 namespace ToyRaft {
