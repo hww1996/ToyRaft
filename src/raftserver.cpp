@@ -12,8 +12,12 @@
 #include "globalmutex.h"
 #include "raft.h"
 #include "raftconnect.h"
+#include "logger.h"
 
 namespace ToyRaft {
+    std::deque<::ToyRaft::RaftClientMsg> RaftServer::requestBuf;
+    std::vector<std::string> RaftServer::readBuffer;
+
     ::grpc::Status
     OuterServiceImpl::serverOutSide(::grpc::ServerContext *context, const ::ToyRaft::RaftClientMsg *request,
                                     ::ToyRaft::RaftServerMsg *response) {
@@ -27,14 +31,21 @@ namespace ToyRaft {
             return sta;
         }
         switch (request->querytype()) {
-            case ::ToyRaft::RaftClientMsg::APPEND:
+            case ::ToyRaft::RaftClientMsg::APPEND: {
                 switch (state) {
                     case FOLLOWER: {
                         auto nodes = RaftConfig::getNodes();
                         response->set_sendbacktype(RaftServerMsg::REDIRECT);
                         ServerRedirectMsg sendRedirectMsg;
-                        sendRedirectMsg.set_ip(nodes[currentLeaderId]->ip_);
-                        sendRedirectMsg.set_port(nodes[currentLeaderId]->port_);
+                        if (-1 == currentLeaderId) {
+                            sendRedirectMsg.set_ip(RaftConfig::getOuterIP());
+                            sendRedirectMsg.set_port(RaftConfig::getOuterPort());
+                        } else {
+                            sendRedirectMsg.set_ip(nodes[currentLeaderId]->outerIP_);
+                            sendRedirectMsg.set_port(nodes[currentLeaderId]->outerPort_);
+                        }
+
+                        LOGDEBUG("server ip:%s,port:%d", sendRedirectMsg.ip().c_str(), sendRedirectMsg.port());
 
                         std::string sendRedirectMsgBuf;
                         sendRedirectMsg.SerializeToString(&sendRedirectMsgBuf);
@@ -46,6 +57,7 @@ namespace ToyRaft {
                         return sta;
                     }
                     case LEADER: {
+                        LOGDEBUG("push to the requestBuf.");
                         {
                             std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
                             RaftServer::requestBuf.push_back(*request);
@@ -58,6 +70,8 @@ namespace ToyRaft {
                         return sta;
                     }
                 }
+            }
+                break;
             case ::ToyRaft::RaftClientMsg::QUERY: {
                 ClientQueryMsg clientQueryMsg;
                 clientQueryMsg.ParseFromString(request->clientbuf());
@@ -75,6 +89,7 @@ namespace ToyRaft {
                 serverQueryMsg.SerializeToString(&serverQueryMsgBuf);
                 response->set_serverbuf(serverQueryMsgBuf.c_str(), serverQueryMsgBuf.size());
             }
+                break;
             default:
                 response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                 break;
@@ -82,8 +97,7 @@ namespace ToyRaft {
         return sta;
     }
 
-    std::deque<::ToyRaft::RaftClientMsg> RaftServer::requestBuf;
-    std::vector<std::string> RaftServer::readBuffer;
+
 
     RaftServer::RaftServer(const std::string &raftConfigPath) {
         RaftConfig cs(raftConfigPath);
@@ -96,7 +110,7 @@ namespace ToyRaft {
         int ret = 0;
         Raft raft;
         while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::this_thread::sleep_for(std::chrono::seconds(3));
             ret = raft.tick();
             if (0 != ret) {
                 break;
@@ -129,6 +143,7 @@ namespace ToyRaft {
             ClientAppendMsg clientAppendMsg;
             {
                 std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
+                LOGDEBUG("requestBuf size:%d", requestBuf.size());
                 if (requestBuf.empty()) {
                     break;
                 }
@@ -136,6 +151,7 @@ namespace ToyRaft {
                 requestBuf.pop_front();
             }
             auto Logs = clientAppendMsg.appendlog();
+            LOGDEBUG("log size:%d", requestBuf.size());
             for (auto &Log : Logs) {
                 netLog.emplace_back(Log.c_str(), Log.size());
             }
@@ -175,6 +191,7 @@ namespace ToyRaft {
                 serverQueryMsg.add_appendlog(readBuffer[i].c_str(), readBuffer[i].size());
             }
         }
+        serverQueryMsg.set_commitindex(commit);
         return ret;
     }
 } // namespace ToyRaft

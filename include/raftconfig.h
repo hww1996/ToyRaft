@@ -13,10 +13,12 @@ namespace ToyRaft {
 
     struct NodeConfig {
         int64_t id_;
-        std::string ip_;
-        int port_;
+        std::string innerIP_;
+        int innerPort_;
+        std::string outerIP_;
+        int outerPort_;
 
-        NodeConfig(int64_t id, const std::string &ip, int port);
+        NodeConfig(int64_t id, const std::string &innerIP, int innerPort, const std::string &outerIP, int outerPort);
     };
 
     class RaftConfig {
@@ -25,7 +27,11 @@ namespace ToyRaft {
 
         static std::unordered_map<int, std::shared_ptr<NodeConfig> > getNodes();
 
+        static std::string getInnerIP();
+
         static int getInnerPort();
+
+        static std::string getOuterIP();
 
         static int getOuterPort();
 
@@ -36,8 +42,6 @@ namespace ToyRaft {
 
         static int loadConfig();
 
-        static int innerPort_;
-        static int outerPort_;
         static int id_;
 
         static std::string raftConfigPath_;

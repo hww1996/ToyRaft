@@ -78,8 +78,8 @@ namespace ToyRaft {
      * @return 返回错误码
      */
     int Raft::tick() {
-        LOGDEBUG("leader:%d,status:%d,commit:%d,electionTimeout:%d,timeTick:%d,term:%d", currentLeaderId, state,
-                 commitIndex, electionTimeout, timeTick, currentTerm);
+        LOGDEBUG("leader:%d,status:%d,commit:%d,lastapplied:%d,electionTimeout:%d,timeTick:%d,term:%d", currentLeaderId,
+                 state, commitIndex, lastAppliedIndex, electionTimeout, timeTick, currentTerm);
         int ret = 0;
 
         timeTick++;
@@ -204,8 +204,10 @@ namespace ToyRaft {
         std::vector<std::string> res;
         ret = RaftServer::getNetLogs(res);
         if (0 != ret) {
+            LOGERROR("get outer log error.ret %d", ret);
             return ret;
         }
+        LOGDEBUG("Outer log size :%d", res.size());
         for (int i = 0; i < res.size(); i++) {
             RaftLog raftLog;
             raftLog.set_term(currentTerm);

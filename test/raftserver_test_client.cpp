@@ -36,9 +36,10 @@ void dealResponse(const ToyRaft::RaftServerMsg &raftServerMsg, std::string &send
         case ToyRaft::RaftServerMsg::REDIRECT: {
 
             ToyRaft::ServerRedirectMsg serverRedirectMsg;
+            serverRedirectMsg.ParseFromString(raftServerMsg.serverbuf());
             std::string tempSendName = serverRedirectMsg.ip() + ":" + std::to_string(serverRedirectMsg.port());
             sendName.assign(tempSendName);
-            ToyRaft::LOGDEBUG("meet redirect.now sendname:%s", sendName.c_str());
+            ToyRaft::LOGDEBUG("meet redirect.now sendname: %s", sendName.c_str());
         }
             break;
         case ToyRaft::RaftServerMsg::RETRY: {
@@ -58,6 +59,7 @@ int main() {
     int sendType = 0;
     std::string sendName = "0.0.0.0:20086";
     while (true) {
+        ToyRaft::LOGDEBUG("now ip:%s", sendName.c_str());
         if (std::cin.eof()) {
             break;
         }
