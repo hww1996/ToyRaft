@@ -1,22 +1,26 @@
 {
   "id": 1,
-  "outerListenPort": 2345,
-  "innerListenPort": 1234,
   "nodes": [
     {
       "id": 1,
-      "ip": "127.0.0.1",
-      "port": 1234
+      "innerIP": "127.0.0.1",
+      "innerPort": 10086,
+      "outerIP": "0.0.0.0",
+      "outerPort": 20086
     },
     {
       "id": 2,
-      "ip": "127.0.0.1",
-      "port": 1235
+      "innerIP": "127.0.0.1",
+      "innerPort": 10087,
+      "outerIP": "0.0.0.0",
+      "outerPort": 20087
     },
     {
       "id": 3,
-      "ip": "127.0.0.1",
-      "port": 1236
+      "innerIP": "127.0.0.1",
+      "innerPort": 10088,
+      "outerIP": "0.0.0.0",
+      "outerPort": 20088
     }
   ]
 }

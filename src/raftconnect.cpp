@@ -103,8 +103,8 @@ namespace ToyRaft {
                 if (nowNodesConfig.end() == nowNodesConfig.find(netData->id_)) {
                     continue;
                 }
-                std::string serverIPPort =
-                        nowNodesConfig[netData->id_]->ip_ + ":" + std::to_string(nowNodesConfig[netData->id_]->port_);
+                std::string serverIPPort = nowNodesConfig[netData->id_]->innerIP_ + ":" +
+                                           std::to_string(nowNodesConfig[netData->id_]->innerPort_);
                 std::unique_ptr<::ToyRaft::SendAndReply::Stub> clientPtr(std::move(::ToyRaft::SendAndReply::NewStub(
                         grpc::CreateChannel(serverIPPort, grpc::InsecureChannelCredentials()))));
                 ::ToyRaft::ServerSendBack sendBack;

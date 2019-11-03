@@ -15,10 +15,10 @@
 
 namespace ToyRaft {
 
-    NodeConfig::NodeConfig(int64_t id, const std::string &ip, int port) : id_(id), ip_(ip), port_(port) {}
+    NodeConfig::NodeConfig(int64_t id, const std::string &innerIP, int innerPort, const std::string &outerIP,
+                           int outerPort) : id_(id), innerIP_(innerIP), innerPort_(innerPort), outerIP_(outerIP),
+                                            outerPort_(outerPort) {}
 
-    int RaftConfig::outerPort_;
-    int RaftConfig::innerPort_;
 
     int RaftConfig::id_;
 
@@ -51,7 +51,7 @@ namespace ToyRaft {
     void RaftConfig::loadConfigWrap() {
         LOGDEBUG("start load config");
         while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(3*86400));
+            std::this_thread::sleep_for(std::chrono::seconds(3 * 86400));
             if (0 != loadConfig()) {
                 break;
             }
@@ -76,7 +76,7 @@ namespace ToyRaft {
         int secondConfIndex = 1 - nowBufIndex.load();
 
         auto &secondConf = NodesConf[secondConfIndex];
-        
+
         LOGDEBUG("before cleaning.second conf length: %d", secondConf.size());
 
         clearNodesConf(secondConf);
@@ -91,16 +91,6 @@ namespace ToyRaft {
         assert(nodeId.IsNumber());
         id_ = nodeId.GetInt();
 
-        assert(doc.HasMember("outerListenPort"));
-        const rapidjson::Value &outerListenPort = doc["outerListenPort"];
-        assert(outerListenPort.IsNumber());
-        outerPort_ = outerListenPort.GetInt();
-
-        assert(doc.HasMember("innerListenPort"));
-        const rapidjson::Value &innerListenPort = doc["innerListenPort"];
-        assert(innerListenPort.IsNumber());
-        innerPort_ = innerListenPort.GetInt();
-
         assert(doc.HasMember("nodes"));
         const rapidjson::Value &nodes = doc["nodes"];
         assert(nodes.IsArray());
@@ -109,13 +99,19 @@ namespace ToyRaft {
             assert(nodes[i].IsObject());
             assert(nodes[i].HasMember("id"));
             assert(nodes[i]["id"].IsNumber());
-            assert(nodes[i].HasMember("ip"));
-            assert(nodes[i]["ip"].IsString());
-            assert(nodes[i].HasMember("port"));
-            assert(nodes[i]["port"].IsNumber());
+            assert(nodes[i].HasMember("innerIP"));
+            assert(nodes[i]["innerIP"].IsString());
+            assert(nodes[i].HasMember("innerPort"));
+            assert(nodes[i]["innerPort"].IsNumber());
+            assert(nodes[i].HasMember("outerIP"));
+            assert(nodes[i]["outerIP"].IsString());
+            assert(nodes[i].HasMember("outerPort"));
+            assert(nodes[i]["outerPort"].IsNumber());
             int nowId = nodes[i]["id"].GetInt();
-            secondConf[nowId] = std::make_shared<NodeConfig>(nodes[i]["id"].GetInt(), nodes[i]["ip"].GetString(),
-                                                             nodes[i]["port"].GetInt());
+            secondConf[nowId] = std::make_shared<NodeConfig>(nodes[i]["id"].GetInt(), nodes[i]["innerIP"].GetString(),
+                                                             nodes[i]["innerPort"].GetInt(),
+                                                             nodes[i]["outerIP"].GetString(),
+                                                             nodes[i]["outerPort"].GetInt());
         }
 
         nowBufIndex.fetch_xor(1);
@@ -131,11 +127,19 @@ namespace ToyRaft {
         return id_;
     }
 
+    std::string RaftConfig::getInnerIP() {
+        return NodesConf[nowBufIndex.load()][id_]->innerIP_;
+    }
+
     int RaftConfig::getInnerPort() {
-        return innerPort_;
+        return NodesConf[nowBufIndex.load()][id_]->innerPort_;
+    }
+
+    std::string RaftConfig::getOuterIP() {
+        return NodesConf[nowBufIndex.load()][id_]->outerIP_;
     }
 
     int RaftConfig::getOuterPort() {
-        return outerPort_;
+        return NodesConf[nowBufIndex.load()][id_]->outerPort_;
     }
 }// namespace ToyRaft
