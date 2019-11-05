@@ -241,11 +241,11 @@ namespace ToyRaft {
                     requestAppend.set_term(currentTerm);
                     requestAppend.set_currentleaderid(id);
                     requestAppend.set_leadercommit(commitIndex);
-                    requestAppend.set_prelogindex(nodeIter->second->matchIndex);
+                    requestAppend.set_prelogindex(nodeIter->second->nextIndex - 1);
                     if (requestAppend.prelogindex() == -1) {
                         requestAppend.set_prelogterm(-1);
                     } else {
-                        requestAppend.set_prelogterm(log[nodeIter->second->matchIndex].term());
+                        requestAppend.set_prelogterm(log[nodeIter->second->nextIndex - 1].term());
                     }
                     ::ToyRaft::AllSend allSend;
                     allSend.set_sendfrom(id);
@@ -504,7 +504,6 @@ namespace ToyRaft {
                     LOGDEBUG("recv the reqvote.");
                     RequestVote requestVote;
                     requestVote.ParseFromString(allSend.sendbuf());
-                    LOGDEBUG("deal with reqvote.");
                     ret = handleRequestVote(requestVote, allSend.sendfrom());
                 }
                     break;
@@ -513,7 +512,6 @@ namespace ToyRaft {
                     RequestVoteResponse requestVoteResponse;
                     requestVoteResponse.ParseFromString(allSend.sendbuf());
                     ret = handleRequestVoteResponse(requestVoteResponse, allSend.sendfrom());
-                    LOGDEBUG("deal with votersp.");
                 }
                     break;
                 case ::ToyRaft::AllSend::REQAPPEND: {
@@ -521,7 +519,6 @@ namespace ToyRaft {
                     RequestAppend requestAppend;
                     requestAppend.ParseFromString(allSend.sendbuf());
                     ret = handleRequestAppend(requestAppend, allSend.sendfrom());
-                    LOGDEBUG("deal with reqappend.");
                 }
                     break;
                 case ::ToyRaft::AllSend::APPENDRSP: {
@@ -529,7 +526,6 @@ namespace ToyRaft {
                     RequestAppendResponse requestAppendResponse;
                     requestAppendResponse.ParseFromString(allSend.sendbuf());
                     ret = handleRequestAppendResponse(requestAppendResponse, allSend.sendfrom());
-                    LOGDEBUG("deal with appendrsp.");
                 }
                     break;
                 default:
