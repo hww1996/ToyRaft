@@ -319,7 +319,6 @@ namespace ToyRaft {
                 }
             }
         } while (false);
-        LOGDEBUG("I am here.");
         ::ToyRaft::AllSend requestVoteRsp;
         requestVoteRsp.set_sendfrom(id);
         requestVoteRsp.set_sendtype(::ToyRaft::AllSend::VOTERSP);
@@ -412,6 +411,7 @@ namespace ToyRaft {
             // 当前的term大于requestAppend的term，
             // 那么说明这个leader是过期的，直接返回false，并告诉他出现异常
         else {
+            LOGDEBUG("Term is smaller.");
             appendRsp.set_term(currentTerm);
             appendRsp.set_appliedindex(lastAppliedIndex);
             appendRsp.set_success(false);
