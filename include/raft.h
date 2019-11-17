@@ -41,7 +41,8 @@ namespace ToyRaft {
         Raft();
 
         int tick();
-    private:
+
+    protected:
         int recvInnerMsg();
 
         // 发送vote请求

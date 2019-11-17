@@ -116,6 +116,3 @@ cmake-build-debug/
 
 # macos
 .DS_Store
-
-# test
-conf_test/
