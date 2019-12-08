@@ -29,6 +29,7 @@ namespace ToyRaft {
         int serverForever();
 
     private:
+        //TODO : 添加个外界只能add和remove一个节点。
 
         static int recvFromNet();
 

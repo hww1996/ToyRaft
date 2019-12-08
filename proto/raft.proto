@@ -22,6 +22,7 @@ message RaftLog {
     int64 term = 1;
     enum LogType {
         APPEND = 0;
+        MEMBER = 1;
     }
     LogType type = 2;
     bytes buf = 3;
@@ -39,7 +40,7 @@ message RequestAppend {
 message RequestAppendResponse {
     int64 term = 1;
     int64 sentBackId = 2;
-    int64 appliedIndex = 3;
+    int64 lastLogIndex = 3;
     bool success = 4;
 }
 

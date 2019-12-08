@@ -70,8 +70,15 @@ namespace ToyRaft {
 
         int commit();
 
+        int apply();
+
         // 外面的请求发送log过来
         int getFromOuterNet();
+
+        // 更新集群
+        int updatePeers();
+
+        //TODO : 添加的节点不能进行选举，添加个开关，外界能查询这个开关。
 
         // 任期相关
         int64_t id;
