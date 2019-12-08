@@ -25,20 +25,20 @@ namespace ToyRaft {
 
     class OuterRaftStatus {
     public:
-        static int push(int64_t leaderId, Status state, int64_t commitIndex);
+        static int push(int64_t leaderId, Status state, int64_t commitIndex, bool canVote);
 
-        static int get(int64_t &leaderId, Status &state, int64_t &commitIndex);
+        static int get(int64_t &leaderId, Status &state, int64_t &commitIndex, bool &canVote);
 
     private:
         static int64_t leaderId_;
         static Status state_;
         static int64_t commitIndex_;
-
+        static bool canVote_;
     };
 
     class Raft {
     public:
-        Raft();
+        Raft(bool votable = true);
 
         int tick();
 
@@ -97,6 +97,8 @@ namespace ToyRaft {
 
         int electionTimeout;
         int heartBeatTimeout;
+
+        bool canVote;
     };
 
 

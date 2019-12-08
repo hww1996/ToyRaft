@@ -15,10 +15,24 @@ message ClientAppendMsg {
     repeated bytes appendLog = 1;
 }
 
+message ClientMemberChangeMsg {
+    enum MemberChangeType {
+        ADD = 0;
+        REMOVE = 1;
+    }
+    MemberChangeType memberChangeType = 1;
+    int64 id = 2;
+    string innerIP = 3;
+    int32 innerPort = 4;
+    string OuterIP = 5;
+    int32 OuterPort = 6;
+}
+
 message RaftClientMsg {
     enum QueryType {
         APPEND = 0;
         QUERY = 1;
+        MEMBER = 2;
     }
     QueryType queryType = 1;
     bytes clientBuf = 2;

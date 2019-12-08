@@ -18,6 +18,10 @@ namespace ToyRaft {
     std::deque<::ToyRaft::RaftClientMsg> RaftServer::requestBuf;
     std::vector<std::string> RaftServer::readBuffer;
 
+    static void makeConfigData(std::unordered_map<int, std::shared_ptr<NodeConfig> > &config, std::string &data) {
+        // 将config变成json，并放到append的log中。
+    }
+
     ::grpc::Status
     OuterServiceImpl::serverOutSide(::grpc::ServerContext *context, const ::ToyRaft::RaftClientMsg *request,
                                     ::ToyRaft::RaftServerMsg *response) {
@@ -25,7 +29,8 @@ namespace ToyRaft {
         int64_t currentLeaderId = -1;
         Status state = FOLLOWER;
         int64_t commitIndex = -1;
-        int ret = OuterRaftStatus::get(currentLeaderId, state, commitIndex);
+        bool canVote = false;
+        int ret = OuterRaftStatus::get(currentLeaderId, state, commitIndex, canVote);
         if (0 != ret) {
             response->set_sendbacktype(RaftServerMsg::RETRY);
             return sta;
@@ -90,13 +95,84 @@ namespace ToyRaft {
                 response->set_serverbuf(serverQueryMsgBuf.c_str(), serverQueryMsgBuf.size());
             }
                 break;
+            case ::ToyRaft::RaftClientMsg::MEMBER: {
+                switch (state) {
+                    case FOLLOWER: {
+                        auto nodes = RaftConfig::getNodes();
+                        response->set_sendbacktype(RaftServerMsg::REDIRECT);
+                        ServerRedirectMsg sendRedirectMsg;
+                        if (-1 == currentLeaderId) {
+                            sendRedirectMsg.set_ip(RaftConfig::getOuterIP());
+                            sendRedirectMsg.set_port(RaftConfig::getOuterPort());
+                        } else {
+                            sendRedirectMsg.set_ip(nodes[currentLeaderId]->outerIP_);
+                            sendRedirectMsg.set_port(nodes[currentLeaderId]->outerPort_);
+                        }
+
+                        LOGDEBUG("server ip:%s,port:%d", sendRedirectMsg.ip().c_str(), sendRedirectMsg.port());
+
+                        std::string sendRedirectMsgBuf;
+                        sendRedirectMsg.SerializeToString(&sendRedirectMsgBuf);
+                        response->set_serverbuf(sendRedirectMsgBuf.c_str(), sendRedirectMsgBuf.size());
+                        return sta;
+                    }
+                    case CANDIDATE: {
+                        response->set_sendbacktype(RaftServerMsg::RETRY);
+                        return sta;
+                    }
+                    case LEADER: {
+                        ClientMemberChangeMsg clientMemberChangeMsg;
+                        clientMemberChangeMsg.ParseFromString(request->clientbuf());
+                        auto configNodes = RaftConfig::getNodes();
+                        auto changeId = clientMemberChangeMsg.id();
+                        switch (clientMemberChangeMsg.memberchangetype()) {
+                            case ClientMemberChangeMsg::ADD: {
+                                if (configNodes.find(changeId) != configNodes.end()) {
+                                    response->set_sendbacktype(RaftServerMsg::UNKNOWN);
+                                    return sta;
+                                }
+                                configNodes[changeId] = std::make_shared<NodeConfig>(changeId,
+                                                                                     clientMemberChangeMsg.innerip(),
+                                                                                     clientMemberChangeMsg.innerport(),
+                                                                                     clientMemberChangeMsg.outerip(),
+                                                                                     clientMemberChangeMsg.outerport());
+                            }
+                            case ClientMemberChangeMsg::REMOVE: {
+                                if (configNodes.find(changeId) == configNodes.end()) {
+                                    response->set_sendbacktype(RaftServerMsg::UNKNOWN);
+                                    return sta;
+                                }
+                                configNodes.erase(changeId);
+                            }
+                            default: {
+                                response->set_sendbacktype(RaftServerMsg::UNKNOWN);
+                                return sta;
+                            }
+                        }
+                        std::string serializeData;
+                        makeConfigData(configNodes, serializeData);
+                        RaftClientMsg raftClientMsg;
+                        raftClientMsg.set_querytype(ToyRaft::RaftClientMsg::APPEND);
+                        raftClientMsg.set_clientbuf(serializeData.c_str(), serializeData.size());
+                        {
+                            std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
+                            RaftServer::requestBuf.push_back(raftClientMsg);
+                        }
+                        response->set_sendbacktype(RaftServerMsg::OK);
+                        return sta;
+                    }
+                    default: {
+                        response->set_sendbacktype(RaftServerMsg::UNKNOWN);
+                        return sta;
+                    }
+                }
+            }
             default:
                 response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                 break;
         }
         return sta;
     }
-
 
 
     RaftServer::RaftServer(const std::string &raftConfigPath) {
@@ -106,9 +182,9 @@ namespace ToyRaft {
         t.detach();
     }
 
-    int RaftServer::serverForever() {
+    int RaftServer::serverForever(bool newJoin) {
         int ret = 0;
-        Raft raft;
+        Raft raft(!newJoin);
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(3));
             ret = raft.tick();

@@ -26,10 +26,9 @@ namespace ToyRaft {
     public:
         RaftServer(const std::string &raftConfigPath);
 
-        int serverForever();
+        int serverForever(bool newJoin = false);
 
     private:
-        //TODO : 添加个外界只能add和remove一个节点。
 
         static int recvFromNet();
 

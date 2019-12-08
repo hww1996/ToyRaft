@@ -24,25 +24,28 @@ namespace ToyRaft {
     int64_t OuterRaftStatus::leaderId_ = -1;
     Status OuterRaftStatus::state_ = FOLLOWER;
     int64_t OuterRaftStatus::commitIndex_ = -1;
+    bool OuterRaftStatus::canVote_ = true;
 
-    int OuterRaftStatus::push(int64_t leaderId, Status state, int64_t commitIndex) {
+    int OuterRaftStatus::push(int64_t leaderId, Status state, int64_t commitIndex, bool canVote) {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::OuterRaftStatusMutex);
             leaderId_ = leaderId;
             state_ = state;
             commitIndex_ = commitIndex;
+            canVote_ = canVote;
         }
         return ret;
     }
 
-    int OuterRaftStatus::get(int64_t &leaderId, Status &state, int64_t &commitIndex) {
+    int OuterRaftStatus::get(int64_t &leaderId, Status &state, int64_t &commitIndex, bool &canVote) {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::OuterRaftStatusMutex);
             leaderId = leaderId_;
             state = state_;
             commitIndex = commitIndex_;
+            canVote = canVote_;
         }
         return ret;
     }
@@ -53,8 +56,8 @@ namespace ToyRaft {
                                                                                     matchIndex(peersMatchIndex),
                                                                                     isVoteForMe(false) {}
 
-    Raft::Raft() : log(std::vector<::ToyRaft::RaftLog>()),
-                   nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
+    Raft::Raft(bool votable) : log(std::vector<::ToyRaft::RaftLog>()),
+                               nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
         auto nodesConfigMap = RaftConfig::getNodes();
         id = RaftConfig::getId();
         currentTerm = -1;
@@ -64,6 +67,8 @@ namespace ToyRaft {
         state = Status::FOLLOWER;
 
         timeTick = 0;
+
+        canVote = votable;
 
         for (auto nodesConfigIt = nodesConfigMap.begin(); nodesConfigMap.end() != nodesConfigIt; ++nodesConfigIt) {
             nodes[nodesConfigIt->first] = std::make_shared<Peers>(nodesConfigIt->second->id_, 0, -1);
@@ -92,9 +97,9 @@ namespace ToyRaft {
         }
 
         updatePeers();
-
-        timeTick++;
-
+        if (!canVote) {
+            timeTick++;
+        }
         if (timeTick >= electionTimeout) {
             ret = becomeCandidate();
             if (0 != ret) {
@@ -124,7 +129,7 @@ namespace ToyRaft {
 
         // 外面能获取的状态
         ret = RaftServer::pushReadBuffer(log);
-        ret = OuterRaftStatus::push(currentLeaderId, state, commitIndex);
+        ret = OuterRaftStatus::push(currentLeaderId, state, commitIndex, canVote);
 
         return ret;
     }
@@ -374,6 +379,7 @@ namespace ToyRaft {
     int Raft::handleRequestAppend(const ::ToyRaft::RequestAppend &requestAppend, int64_t sendFrom) {
         int ret = 0;
         ::ToyRaft::RequestAppendResponse appendRsp;
+        canVote = true;
 
         // 当currentTerm小于或者等于requestAppend的term的时候，那么直接成为follower,并处理appendLog请求
         if (currentTerm <= requestAppend.term()) {
