@@ -150,6 +150,10 @@ namespace ToyRaft {
     }
 
     int Raft::becomeCandidate() {
+        if (!canVote) {
+            LOGERROR("can't noe become candidate.");
+            return 0;
+        }
         int ret = 0;
         currentTerm++;
 
