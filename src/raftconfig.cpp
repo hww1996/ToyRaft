@@ -6,6 +6,7 @@
 #include <cassert>
 #include <thread>
 #include <iterator>
+#include <cstdio>
 
 #include <rapidjson/document.h>
 
@@ -59,7 +60,6 @@ namespace ToyRaft {
     }
 
     int RaftConfig::loadConfig() {
-        LOGDEBUG("loading the config");
         int ret = 0;
 
         // 这里需要采取rename的方式写入文件，因为rename在操作系统层面是原子操作
@@ -70,18 +70,11 @@ namespace ToyRaft {
         std::string jsonData(beg, end);
         file.close();
 
-        LOGDEBUG("loading the file OK");
-        LOGDEBUG("before change.nowBufIndex: %d", nowBufIndex.load());
-
         int secondConfIndex = 1 - nowBufIndex.load();
 
         auto &secondConf = NodesConf[secondConfIndex];
 
-        LOGDEBUG("before cleaning.second conf length: %d", secondConf.size());
-
         clearNodesConf(secondConf);
-
-        LOGDEBUG("after cleaning.second conf length: %d", secondConf.size());
 
         rapidjson::Document doc;
         doc.Parse(jsonData.c_str(), jsonData.size());
@@ -116,10 +109,6 @@ namespace ToyRaft {
 
         nowBufIndex.fetch_xor(1);
 
-        LOGDEBUG("after change.nowBufIndex: %d", nowBufIndex.load());
-
-        LOGDEBUG("<<<<<<<<<<<");
-
         return ret;
     }
 
@@ -141,5 +130,76 @@ namespace ToyRaft {
 
     int RaftConfig::getOuterPort() {
         return NodesConf[nowBufIndex.load()][id_]->outerPort_;
+    }
+
+    bool RaftConfig::checkNodeExists(int64_t id) {
+        auto conf = NodesConf[nowBufIndex.load()];
+        return conf.end() != conf.find(id);
+    }
+
+    int RaftConfig::flushConf(const std::string &b) {
+        std::string tempFileName = ".temp.newconfig";
+        std::fstream file;
+        file.open(tempFileName, std::fstream::out | std::fstream::binary);
+        file << b;
+        file.close();
+        return rename(tempFileName.c_str(), raftConfigPath_.c_str());
+    }
+
+    int RaftConfig::checkConfig(const std::string &jsonData) {
+        rapidjson::Document doc;
+        doc.Parse(jsonData.c_str(), jsonData.size());
+
+        if (!doc.HasMember("id")) {
+            return RAFTCONFIG_ERR::NO_ID;
+        }
+        const rapidjson::Value &nodeId = doc["id"];
+        if (!nodeId.IsNumber()) {
+            return RAFTCONFIG_ERR::ID_NOT_NUM;
+        }
+
+        if (!doc.HasMember("nodes")) {
+            return RAFTCONFIG_ERR::NO_NODES;
+        }
+        const rapidjson::Value &nodes = doc["nodes"];
+        if (!nodes.IsArray()) {
+            return RAFTCONFIG_ERR::NODES_NOT_ARRAY;
+        }
+        for (rapidjson::SizeType i = 0; i < nodes.Size(); i++) {
+            if (!nodes[i].IsObject()) {
+                return RAFTCONFIG_ERR::NODES_MEM_NOT_OBJ;
+            }
+            if (!nodes[i].HasMember("id")) {
+                return RAFTCONFIG_ERR::NO_NODES_MEM_ID;
+            }
+            if (!nodes[i]["id"].IsNumber()) {
+                return RAFTCONFIG_ERR::NODES_MEM_ID_NOT_NUM;
+            }
+            if (!nodes[i].HasMember("innerIP")) {
+                return RAFTCONFIG_ERR::NO_NODES_MEM_INNERIP;
+            }
+            if (!nodes[i]["innerIP"].IsString()) {
+                return RAFTCONFIG_ERR::NODES_MEM_INNERIP_NOT_STR;
+            }
+            if (!nodes[i].HasMember("innerPort")) {
+                return RAFTCONFIG_ERR::NO_NODES_MEM_INNERPORT;
+            }
+            if (!nodes[i]["innerPort"].IsNumber()) {
+                return RAFTCONFIG_ERR::NODES_MEM_INNERPORT_NOT_NUM;
+            }
+            if (!nodes[i].HasMember("outerIP")) {
+                return RAFTCONFIG_ERR::NO_NODES_MEM_OUTERIP;
+            }
+            if (!nodes[i]["outerIP"].IsString()) {
+                return RAFTCONFIG_ERR::NODES_MEM_OUTERIP_NOT_STR;
+            }
+            if (!nodes[i].HasMember("outerPort")) {
+                return RAFTCONFIG_ERR::NO_NODES_MEM_OUTERPORT;
+            }
+            if (!nodes[i]["outerPort"].IsNumber()) {
+                return RAFTCONFIG_ERR::NODES_MEM_OUTERPORT_NOT_NUM;
+            }
+        }
+        return 0;
     }
 }// namespace ToyRaft

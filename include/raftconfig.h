@@ -37,7 +37,31 @@ namespace ToyRaft {
 
         static int getId();
 
+        static bool checkNodeExists(int64_t id);
+
+        static int flushConf(const std::string &b);
+
+        static int checkConfig(const std::string &jsonData);
+
     private:
+        enum RAFTCONFIG_ERR {
+            NO_ID = 1,
+            ID_NOT_NUM,
+            NO_NODES,
+            NODES_NOT_ARRAY,
+            NODES_MEM_NOT_OBJ,
+            NO_NODES_MEM_ID,
+            NODES_MEM_ID_NOT_NUM,
+            NO_NODES_MEM_INNERIP,
+            NODES_MEM_INNERIP_NOT_STR,
+            NO_NODES_MEM_INNERPORT,
+            NODES_MEM_INNERPORT_NOT_NUM,
+            NO_NODES_MEM_OUTERIP,
+            NODES_MEM_OUTERIP_NOT_STR,
+            NO_NODES_MEM_OUTERPORT,
+            NODES_MEM_OUTERPORT_NOT_NUM,
+        };
+
         static void loadConfigWrap();
 
         static int loadConfig();
