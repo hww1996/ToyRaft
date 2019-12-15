@@ -7,6 +7,9 @@
 #include <grpcpp/server_context.h>
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
+#include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
 
 #include "raftserver.h"
 #include "globalmutex.h"
@@ -20,6 +23,29 @@ namespace ToyRaft {
 
     static void makeConfigData(std::unordered_map<int, std::shared_ptr<NodeConfig> > &config, std::string &data) {
         // 将config变成json，并放到append的log中。
+        rapidjson::Value ans(rapidjson::kObjectType);
+        rapidjson::Value raftNodes(rapidjson::kArrayType);
+        rapidjson::Document document;
+        rapidjson::Document::AllocatorType &alloc = document.GetAllocator();
+
+        ans.AddMember("id", rapidjson::Value().SetInt(RaftConfig::getId()), alloc);
+        for (auto it = config.begin(); config.end() != it; ++it) {
+            rapidjson::Value raftNodeItem(rapidjson::kObjectType);
+            raftNodeItem.AddMember("id", rapidjson::Value().SetInt(it->first), alloc);
+            raftNodeItem.AddMember("innerIP", rapidjson::Value().SetString(it->second->innerIP_.c_str(),
+                                                                           it->second->innerIP_.size(), alloc), alloc);
+            raftNodeItem.AddMember("innerPort", rapidjson::Value().SetInt(it->second->innerPort_), alloc);
+            raftNodeItem.AddMember("outerIP", rapidjson::Value().SetString(it->second->outerIP_.c_str(),
+                                                                           it->second->outerIP_.size(), alloc), alloc);
+            raftNodeItem.AddMember("outerPort", rapidjson::Value().SetInt(it->second->outerPort_), alloc);
+            raftNodes.PushBack(raftNodeItem, alloc);
+        }
+        ans.AddMember("nodes", raftNodes, alloc);
+        rapidjson::StringBuffer buff;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buff);
+        ans.Accept(writer);
+        std::string tempJsonString = buff.GetString();
+        data.assign(tempJsonString);
     }
 
     ::grpc::Status
@@ -57,10 +83,12 @@ namespace ToyRaft {
                         response->set_serverbuf(sendRedirectMsgBuf.c_str(), sendRedirectMsgBuf.size());
                         return sta;
                     }
+                        break;
                     case CANDIDATE: {
                         response->set_sendbacktype(RaftServerMsg::RETRY);
                         return sta;
                     }
+                        break;
                     case LEADER: {
                         LOGDEBUG("push to the requestBuf.");
                         {
@@ -70,10 +98,12 @@ namespace ToyRaft {
                         response->set_sendbacktype(RaftServerMsg::OK);
                         return sta;
                     }
+                        break;
                     default: {
                         response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                         return sta;
                     }
+                        break;
                 }
             }
                 break;
@@ -116,10 +146,12 @@ namespace ToyRaft {
                         response->set_serverbuf(sendRedirectMsgBuf.c_str(), sendRedirectMsgBuf.size());
                         return sta;
                     }
+                        break;
                     case CANDIDATE: {
                         response->set_sendbacktype(RaftServerMsg::RETRY);
                         return sta;
                     }
+                        break;
                     case LEADER: {
                         ClientMemberChangeMsg clientMemberChangeMsg;
                         clientMemberChangeMsg.ParseFromString(request->clientbuf());
@@ -137,6 +169,7 @@ namespace ToyRaft {
                                                                                      clientMemberChangeMsg.outerip(),
                                                                                      clientMemberChangeMsg.outerport());
                             }
+                                break;
                             case ClientMemberChangeMsg::REMOVE: {
                                 if (configNodes.find(changeId) == configNodes.end()) {
                                     response->set_sendbacktype(RaftServerMsg::UNKNOWN);
@@ -144,10 +177,12 @@ namespace ToyRaft {
                                 }
                                 configNodes.erase(changeId);
                             }
+                                break;
                             default: {
                                 response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                                 return sta;
                             }
+                                break;
                         }
                         std::string serializeData;
                         makeConfigData(configNodes, serializeData);
@@ -161,12 +196,27 @@ namespace ToyRaft {
                         response->set_sendbacktype(RaftServerMsg::OK);
                         return sta;
                     }
+                        break;
                     default: {
                         response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                         return sta;
                     }
+                        break;
                 }
             }
+                break;
+            case ::ToyRaft::RaftClientMsg::STATUS: {
+                ServerInnerStatusMsg serverInnerStatusMsg;
+                serverInnerStatusMsg.set_currentleaderid(currentLeaderId);
+                serverInnerStatusMsg.set_commitindex(commitIndex);
+                serverInnerStatusMsg.set_state(state);
+                serverInnerStatusMsg.set_canvote(canVote);
+                response->set_sendbacktype(RaftServerMsg::OK);
+                std::string serverInnerStatusMsgBuf;
+                serverInnerStatusMsg.SerializeToString(&serverInnerStatusMsgBuf);
+                response->set_serverbuf(serverInnerStatusMsgBuf.c_str(), serverInnerStatusMsgBuf.size());
+            }
+                break;
             default:
                 response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                 break;
@@ -195,8 +245,8 @@ namespace ToyRaft {
         return ret;
     }
 
-    static void initOuterServer(int port) {
-        std::string server_address = "0.0.0.0:";
+    static void initOuterServer(const std::string &IP, int port) {
+        std::string server_address = IP + ":";
         server_address += std::to_string(port);
         ::ToyRaft::OuterServiceImpl service;
 
@@ -209,7 +259,7 @@ namespace ToyRaft {
 
     int RaftServer::recvFromNet() {
         int ret = 0;
-        initOuterServer(RaftConfig::getOuterPort());
+        initOuterServer(RaftConfig::getOuterIP(), RaftConfig::getOuterPort());
         return ret;
     }
 

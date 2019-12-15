@@ -19,7 +19,7 @@ void dealResponse(const ToyRaft::RaftServerMsg &raftServerMsg, std::string &send
     switch (raftServerMsg.sendbacktype()) {
         case ToyRaft::RaftServerMsg::OK: {
             if (ToyRaft::RaftClientMsg::APPEND == clientType) {
-                ToyRaft::LOGDEBUG("apend the log OK.");
+                ToyRaft::LOGDEBUG("append the log OK.");
             } else if (ToyRaft::RaftClientMsg::QUERY == clientType) {
                 ToyRaft::LOGDEBUG("query the log OK.");
                 ToyRaft::ServerQueryMsg serverQueryMsg;
@@ -30,6 +30,14 @@ void dealResponse(const ToyRaft::RaftServerMsg &raftServerMsg, std::string &send
                 for (int i = 0; i < retLog.size(); i++) {
                     ToyRaft::LOGDEBUG("index:%d.log content:%s", i, retLog[i].c_str());
                 }
+            } else if (ToyRaft::RaftClientMsg::MEMBER == clientType) {
+                ToyRaft::LOGDEBUG("member change OK.");
+            } else if (ToyRaft::RaftClientMsg::STATUS == clientType) {
+                ToyRaft::ServerInnerStatusMsg serverInnerStatusMsg;
+                serverInnerStatusMsg.ParseFromString(raftServerMsg.serverbuf());
+                ToyRaft::LOGDEBUG("leaderId:%d,commitId:%d,state:%d,canvote:%d", serverInnerStatusMsg.currentleaderid(),
+                                  serverInnerStatusMsg.commitindex(), serverInnerStatusMsg.state(),
+                                  serverInnerStatusMsg.canvote());
             }
         }
             break;
@@ -114,6 +122,65 @@ int main() {
                 clientPtr->serverOutSide(&context, raftClientMsg, &raftServerMsg);
                 clientPtr.reset(nullptr);
                 dealResponse(raftServerMsg, sendName, ToyRaft::RaftClientMsg::QUERY);
+            }
+                break;
+            case 2: { // member change
+                int memberChangeType, id; // 0:Add 1:Remove
+                std::cin >> memberChangeType >> id;
+                if (std::cin.eof()) {
+                    exit(0);
+                }
+                ToyRaft::ClientMemberChangeMsg clientMemberChangeMsg;
+                if (0 == memberChangeType) {
+                    clientMemberChangeMsg.set_memberchangetype(ToyRaft::ClientMemberChangeMsg::ADD);
+                    clientMemberChangeMsg.set_id(id);
+                    std::string innerIP, outerIP;
+                    int innerPort, outerPort;
+                    std::cin >> innerIP >> outerPort;
+                    if (std::cin.eof()) {
+                        exit(0);
+                    }
+                    std::cin >> innerPort >> outerPort;
+                    if (std::cin.eof()) {
+                        exit(0);
+                    }
+                    clientMemberChangeMsg.set_innerip(innerIP);
+                    clientMemberChangeMsg.set_innerport(innerPort);
+                    clientMemberChangeMsg.set_outerip(outerIP);
+                    clientMemberChangeMsg.set_outerport(outerPort);
+                } else if (1 == memberChangeType) {
+                    clientMemberChangeMsg.set_memberchangetype(ToyRaft::ClientMemberChangeMsg::REMOVE);
+                    clientMemberChangeMsg.set_id(id);
+                }
+                ToyRaft::RaftClientMsg raftClientMsg;
+                raftClientMsg.set_querytype(ToyRaft::RaftClientMsg::MEMBER);
+                std::string raftClientMsgBuf;
+                clientMemberChangeMsg.SerializeToString(&raftClientMsgBuf);
+                raftClientMsg.set_clientbuf(raftClientMsgBuf.c_str(), raftClientMsgBuf.size());
+                ToyRaft::RaftServerMsg raftServerMsg;
+                std::unique_ptr<ToyRaft::OutSideService::Stub> clientPtr(std::move(ToyRaft::OutSideService::NewStub(
+                        grpc::CreateChannel(sendName, grpc::InsecureChannelCredentials()))));
+                grpc::ClientContext context;
+                clientPtr->serverOutSide(&context, raftClientMsg, &raftServerMsg);
+                clientPtr.reset(nullptr);
+                dealResponse(raftServerMsg, sendName, ToyRaft::RaftClientMsg::MEMBER);
+            }
+                break;
+            case 3: { // 查询状态
+                ToyRaft::ClientQueryInnerStatusMsg clientQueryInnerStatusMsg;
+                clientQueryInnerStatusMsg.set_id(0);
+                ToyRaft::RaftClientMsg raftClientMsg;
+                raftClientMsg.set_querytype(ToyRaft::RaftClientMsg::STATUS);
+                std::string raftClientMsgBuf;
+                clientQueryInnerStatusMsg.SerializeToString(&raftClientMsgBuf);
+                raftClientMsg.set_clientbuf(raftClientMsgBuf.c_str(), raftClientMsgBuf.size());
+                ToyRaft::RaftServerMsg raftServerMsg;
+                std::unique_ptr<ToyRaft::OutSideService::Stub> clientPtr(std::move(ToyRaft::OutSideService::NewStub(
+                        grpc::CreateChannel(sendName, grpc::InsecureChannelCredentials()))));
+                grpc::ClientContext context;
+                clientPtr->serverOutSide(&context, raftClientMsg, &raftServerMsg);
+                clientPtr.reset(nullptr);
+                dealResponse(raftServerMsg, sendName, ToyRaft::RaftClientMsg::STATUS);
             }
                 break;
             default:
