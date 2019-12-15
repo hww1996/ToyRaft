@@ -8,6 +8,8 @@
 #include <cmath>
 
 #include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
 
 #include "raft.h"
 #include "raftconnect.h"
@@ -24,25 +26,28 @@ namespace ToyRaft {
     int64_t OuterRaftStatus::leaderId_ = -1;
     Status OuterRaftStatus::state_ = FOLLOWER;
     int64_t OuterRaftStatus::commitIndex_ = -1;
+    bool OuterRaftStatus::canVote_ = true;
 
-    int OuterRaftStatus::push(int64_t leaderId, Status state, int64_t commitIndex) {
+    int OuterRaftStatus::push(int64_t leaderId, Status state, int64_t commitIndex, bool canVote) {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::OuterRaftStatusMutex);
             leaderId_ = leaderId;
             state_ = state;
             commitIndex_ = commitIndex;
+            canVote_ = canVote;
         }
         return ret;
     }
 
-    int OuterRaftStatus::get(int64_t &leaderId, Status &state, int64_t &commitIndex) {
+    int OuterRaftStatus::get(int64_t &leaderId, Status &state, int64_t &commitIndex, bool &canVote) {
         int ret = 0;
         {
             std::lock_guard<std::mutex> lock(GlobalMutex::OuterRaftStatusMutex);
             leaderId = leaderId_;
             state = state_;
             commitIndex = commitIndex_;
+            canVote = canVote_;
         }
         return ret;
     }
@@ -53,8 +58,8 @@ namespace ToyRaft {
                                                                                     matchIndex(peersMatchIndex),
                                                                                     isVoteForMe(false) {}
 
-    Raft::Raft() : log(std::vector<::ToyRaft::RaftLog>()),
-                   nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
+    Raft::Raft(bool votable) : log(std::vector<::ToyRaft::RaftLog>()),
+                               nodes(std::unordered_map<int64_t, std::shared_ptr<Peers>>()) {
         auto nodesConfigMap = RaftConfig::getNodes();
         id = RaftConfig::getId();
         currentTerm = -1;
@@ -65,6 +70,8 @@ namespace ToyRaft {
 
         timeTick = 0;
 
+        canVote = votable;
+
         for (auto nodesConfigIt = nodesConfigMap.begin(); nodesConfigMap.end() != nodesConfigIt; ++nodesConfigIt) {
             nodes[nodesConfigIt->first] = std::make_shared<Peers>(nodesConfigIt->second->id_, 0, -1);
         }
@@ -72,7 +79,7 @@ namespace ToyRaft {
         heartBeatTimeout = 1;
         time_t seed = time(NULL);
         srand(static_cast<unsigned int>(seed));
-        int64_t standerElectionTimeOut = heartBeatTimeout * 10;
+        int standerElectionTimeOut = heartBeatTimeout * 10;
         electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
     }
 
@@ -82,8 +89,9 @@ namespace ToyRaft {
      * @return 返回错误码
      */
     int Raft::tick() {
-        LOGDEBUG("leader:%d,status:%d,commit:%d,lastapplied:%d,electionTimeout:%d,timeTick:%d,term:%d", currentLeaderId,
-                 state, commitIndex, lastAppliedIndex, electionTimeout, timeTick, currentTerm);
+        LOGDEBUG("leader:%d,status:%d,commit:%d,lastapplied:%d,electionTimeout:%d,timeTick:%d,term:%d,log size:%d",
+                 currentLeaderId, state, commitIndex, lastAppliedIndex, electionTimeout, timeTick, currentTerm,
+                 log.size());
         int ret = 0;
 
         if (!RaftConfig::checkNodeExists(id)) {
@@ -91,10 +99,12 @@ namespace ToyRaft {
             return 1;
         }
 
-        updatePeers();
-
-        timeTick++;
-
+        if (commitIndex > lastAppliedIndex) {
+            ret = apply();
+        }
+        if (canVote) {
+            timeTick++;
+        }
         if (timeTick >= electionTimeout) {
             ret = becomeCandidate();
             if (0 != ret) {
@@ -109,11 +119,6 @@ namespace ToyRaft {
             if (0 != ret) {
                 return ret;
             }
-        } else if (Status::CANDIDATE == state) {
-            ret = sendRequestVote();
-            if (0 != ret) {
-                return ret;
-            }
         }
 
         // 每隔一段时间接收一次消息
@@ -121,22 +126,22 @@ namespace ToyRaft {
         if (0 != ret) {
             return ret;
         }
-
         // 外面能获取的状态
         ret = RaftServer::pushReadBuffer(log);
-        ret = OuterRaftStatus::push(currentLeaderId, state, commitIndex);
-
+        ret = OuterRaftStatus::push(currentLeaderId, state, commitIndex, canVote);
+        updatePeers();
         return ret;
     }
 
     int Raft::becomeLeader() {
+        LOGDEBUG("become leader");
         int ret = 0;
         if (Status::CANDIDATE == state) {
             state = Status::LEADER;
             for (auto nodeIt = nodes.begin(); nodes.end() != nodeIt; ++nodeIt) {
                 if (nodeIt->second->id != id) {
                     nodeIt->second->matchIndex = -1;
-                    nodeIt->second->nextIndex = log.size() + 1;
+                    nodeIt->second->nextIndex = log.size();
                 }
             }
             ret = sendRequestAppend();
@@ -145,6 +150,11 @@ namespace ToyRaft {
     }
 
     int Raft::becomeCandidate() {
+        if (!canVote) {
+            LOGERROR("can not become candidate.");
+            return 0;
+        }
+        LOGDEBUG("become candidate");
         int ret = 0;
         currentTerm++;
 
@@ -157,7 +167,7 @@ namespace ToyRaft {
         }
         nodes[id]->isVoteForMe = true;
 
-        time_t seed = time(0);
+        time_t seed = time(nullptr);
         srand(static_cast<unsigned int>(seed));
         int standerElectionTimeOut = heartBeatTimeout * 10;
         timeTick = 0;
@@ -167,6 +177,7 @@ namespace ToyRaft {
     }
 
     int Raft::becomeFollower(int64_t term, int64_t leaderId) {
+        LOGDEBUG("become follower");
         int ret = 0;
         state = Status::FOLLOWER;
         currentLeaderId = leaderId;
@@ -185,7 +196,7 @@ namespace ToyRaft {
             ::ToyRaft::RequestVote requestVote;
             requestVote.set_term(currentTerm);
             requestVote.set_candidateid(id);
-            int lastLogIndex = log.size() - 1;
+            int lastLogIndex = static_cast<int>(log.size()) - 1;
             requestVote.set_lastlogindex(lastLogIndex);
             if (-1 == lastLogIndex) {
                 requestVote.set_lastlogterm(-1);
@@ -214,7 +225,7 @@ namespace ToyRaft {
 
     int Raft::getFromOuterNet() {
         int ret = 0;
-        std::vector<std::string> res;
+        std::vector<RaftLog> res;
         ret = RaftServer::getNetLogs(res);
         if (0 != ret) {
             LOGERROR("get outer log error.ret %d", ret);
@@ -222,11 +233,8 @@ namespace ToyRaft {
         }
         LOGDEBUG("Outer log size :%d", res.size());
         for (int i = 0; i < res.size(); i++) {
-            RaftLog raftLog;
-            raftLog.set_term(currentTerm);
-            raftLog.set_type(::ToyRaft::RaftLog::APPEND);
-            raftLog.set_buf(res[i].c_str(), res[i].size());
-            log.push_back(raftLog);
+            res[i].set_term(currentTerm);
+            log.push_back(res[i]);
         }
         return ret;
     }
@@ -246,15 +254,15 @@ namespace ToyRaft {
                     ::ToyRaft::RequestAppend requestAppend;
                     for (int i = nodeIter->second->nextIndex; i < log.size(); i++) {
                         auto needAppendLog = requestAppend.add_entries();
-                        needAppendLog->set_term(currentTerm);
-                        needAppendLog->set_type(::ToyRaft::RaftLog::APPEND);
+                        needAppendLog->set_term(log[i].term());
+                        needAppendLog->set_type(log[i].type());
                         needAppendLog->set_buf(log[i].buf().c_str(), log[i].buf().size());
                     }
                     requestAppend.set_term(currentTerm);
                     requestAppend.set_currentleaderid(id);
                     requestAppend.set_leadercommit(commitIndex);
                     requestAppend.set_prelogindex(nodeIter->second->nextIndex - 1);
-                    if (requestAppend.prelogindex() == -1) {
+                    if (log.empty()) {
                         requestAppend.set_prelogterm(-1);
                     } else {
                         requestAppend.set_prelogterm(log[nodeIter->second->nextIndex - 1].term());
@@ -286,12 +294,14 @@ namespace ToyRaft {
         do {
             // 以前的任期已经投过票了，所以不投给他
             if (currentTerm >= requestVote.term()) {
+                LOGDEBUG("the request vote term is smaller.");
                 voteRspMsg.set_term(currentTerm);
                 voteRspMsg.set_voteforme(false);
             }
                 // 假设他的任期更大，那么比较日志那个更新
             else {
-                if (0 == log.size()) {
+                if (log.empty()) {
+                    LOGDEBUG("the log is empty.");
                     becomeFollower(requestVote.term(), requestVote.candidateid());
                     voteRspMsg.set_term(currentTerm);
                     voteRspMsg.set_voteforme(true);
@@ -301,21 +311,26 @@ namespace ToyRaft {
                 // 首先比较的是最后提交的日志的任期
                 // 投票请求的最后提交的日志的任期小于当前日志的最后任期
                 // 那么不投票给他
+                LOGDEBUG("last log term:%d. requestVote term:%d.", lastAppendLog.term(), requestVote.lastlogterm());
                 if (lastAppendLog.term() > requestVote.lastlogterm()) {
+                    LOGDEBUG("election term is smaller.");
                     voteRspMsg.set_term(currentTerm);
                     voteRspMsg.set_voteforme(false);
                 }
                     // 投票请求的最后提交的日志的任期等于当前日志的最后任期
                     // 那么比较应用到状态机的日志index
                 else if (lastAppendLog.term() == requestVote.lastlogterm()) {
+                    LOGDEBUG("election term is equal.");
                     // 假如当前应用到状态机的index比投票请求的大
                     // 那么不投票给他
-                    if (log.size() - 1 > requestVote.lastlogindex()) {
+                    if (static_cast<int>(log.size() - 1) > requestVote.lastlogindex()) {
+                        LOGDEBUG("log's term is bigger.");
                         voteRspMsg.set_term(currentTerm);
                         voteRspMsg.set_voteforme(false);
                     } else {
                         // 投票给候选者，并把自己的状态变为follower，
                         // 设置当前任期和投票给的人
+                        LOGDEBUG("log's term is smaller.");
                         becomeFollower(requestVote.term(), requestVote.candidateid());
                         voteRspMsg.set_term(currentTerm);
                         voteRspMsg.set_voteforme(true);
@@ -325,6 +340,7 @@ namespace ToyRaft {
                 else {
                     // 投票给候选者，并把自己的状态变为follower，
                     // 设置当前任期和投票给的人
+                    LOGDEBUG("election term is bigger.");
                     becomeFollower(requestVote.term(), requestVote.candidateid());
                     voteRspMsg.set_term(currentTerm);
                     voteRspMsg.set_voteforme(true);
@@ -351,15 +367,17 @@ namespace ToyRaft {
         if (Status::CANDIDATE != state) {
             return 0;
         }
+        LOGDEBUG("recv %d the return vote:%d", sendFrom, requestVoteResponse.voteforme());
         if (requestVoteResponse.term() == currentTerm && requestVoteResponse.voteforme()) {
             nodes[sendFrom]->isVoteForMe = true;
         }
-        int voteCount = 1;
+        int voteCount = 0;
         for (auto nodesIt = nodes.begin(); nodes.end() != nodesIt; ++nodesIt) {
             if (nodesIt->second->isVoteForMe) {
                 voteCount++;
             }
         }
+        LOGDEBUG("voteCount:%d", voteCount);
         if (voteCount >= (nodes.size() / 2 + 1)) {
             becomeLeader();
         }
@@ -374,14 +392,16 @@ namespace ToyRaft {
     int Raft::handleRequestAppend(const ::ToyRaft::RequestAppend &requestAppend, int64_t sendFrom) {
         int ret = 0;
         ::ToyRaft::RequestAppendResponse appendRsp;
+        canVote = true;
 
         // 当currentTerm小于或者等于requestAppend的term的时候，那么直接成为follower,并处理appendLog请求
         if (currentTerm <= requestAppend.term()) {
             becomeFollower(requestAppend.term(), requestAppend.currentleaderid());
             // 当前的log的最后的index小于preLogIndex，那么直接返回错误
-            if (log.size() - 1 < requestAppend.prelogindex()) {
+            LOGDEBUG("pre log index:%d", requestAppend.prelogindex());
+            if (static_cast<int>(log.size()) - 1 < requestAppend.prelogindex()) {
                 appendRsp.set_term(currentTerm);
-                appendRsp.set_lastlogindex(log.size() - 1);
+                appendRsp.set_lastlogindex(static_cast<int>(log.size()) - 1);
                 appendRsp.set_success(false);
             } else {
                 auto &appendEntries = requestAppend.entries();
@@ -408,16 +428,16 @@ namespace ToyRaft {
                         log.push_back(appendEntries[entriesIndex++]);
                         LogIndex++;
                     }
-                    commitIndex = min(requestAppend.leadercommit(), log.size() - 1);
+                    commitIndex = min(requestAppend.leadercommit(), static_cast<int>(log.size()) - 1);
                     if (commitIndex > lastAppliedIndex) {
                         ret = apply();
                     }
                     appendRsp.set_term(currentTerm);
-                    appendRsp.set_lastlogindex(log.size() - 1);
+                    appendRsp.set_lastlogindex(static_cast<int>(log.size()) - 1);
                     appendRsp.set_success(true);
                 } else {
                     appendRsp.set_term(currentTerm);
-                    appendRsp.set_lastlogindex(log.size() - 1);
+                    appendRsp.set_lastlogindex(static_cast<int>(log.size()) - 1);
                     appendRsp.set_success(false);
                 }
             }
@@ -427,7 +447,7 @@ namespace ToyRaft {
         else {
             LOGDEBUG("Term is smaller.");
             appendRsp.set_term(currentTerm);
-            appendRsp.set_lastlogindex(log.size() - 1);
+            appendRsp.set_lastlogindex(static_cast<int>(log.size()) - 1);
             appendRsp.set_success(false);
         }
         ::ToyRaft::AllSend requestAppendRsp;
@@ -483,7 +503,7 @@ namespace ToyRaft {
                 }
             }
         }
-        int i = commitCount.size() - 1;
+        int i = static_cast<int>(commitCount.size()) - 1;
         for (; i >= 0; i--) {
             if ((nodes.size() / 2 + 1) <= commitCount[i]) {
                 break;
@@ -502,6 +522,7 @@ namespace ToyRaft {
         int ret = 0;
         lastAppliedIndex++;
         auto &appliedLog = log[lastAppliedIndex];
+        LOGERROR("applied type:%d", appliedLog.type());
         if (ToyRaft::RaftLog::MEMBER == appliedLog.type()) {
             const std::string &jsonData = appliedLog.buf();
             ret = RaftConfig::checkConfig(jsonData);
@@ -511,12 +532,12 @@ namespace ToyRaft {
             }
             rapidjson::Document doc;
             doc.Parse(jsonData.c_str(), jsonData.size());
-            const rapidjson::Value &newConfNodes = doc["nodes"];
-            if (fabs(newConfNodes.Size() - nodes.size()) > 1) {
-                LOGERROR("diff of the new config is more than 1.");
-                return -2;
-            }
-            return RaftConfig::flushConf(jsonData);
+            doc["id"].SetInt(id);
+            rapidjson::StringBuffer buff;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(buff);
+            doc.Accept(writer);
+            std::string tempJsonString = buff.GetString();
+            return RaftConfig::flushConf(tempJsonString);
         }
         return ret;
     }
@@ -534,6 +555,7 @@ namespace ToyRaft {
                     break;
                 }
             }
+            LOGDEBUG("add a node.id:%d", addId);
             if (nodes.find(addId) != nodes.end()) {
                 return 0;
             }
@@ -546,7 +568,8 @@ namespace ToyRaft {
                     break;
                 }
             }
-            if (nodes.find(removeId) != nodes.end()) {
+            LOGDEBUG("remove a node.id:%d", removeId);
+            if (nodes.find(removeId) == nodes.end()) {
                 return 0;
             }
             nodes.erase(removeId);

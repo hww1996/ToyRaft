@@ -15,10 +15,29 @@ message ClientAppendMsg {
     repeated bytes appendLog = 1;
 }
 
+message ClientMemberChangeMsg {
+    enum MemberChangeType {
+        ADD = 0;
+        REMOVE = 1;
+    }
+    MemberChangeType memberChangeType = 1;
+    int64 id = 2;
+    string innerIP = 3;
+    int32 innerPort = 4;
+    string OuterIP = 5;
+    int32 OuterPort = 6;
+}
+
+message ClientQueryInnerStatusMsg {
+    int32 id = 1;
+}
+
 message RaftClientMsg {
     enum QueryType {
         APPEND = 0;
         QUERY = 1;
+        MEMBER = 2;
+        STATUS = 3;
     }
     QueryType queryType = 1;
     bytes clientBuf = 2;
@@ -32,6 +51,13 @@ message ServerRedirectMsg {
 message ServerQueryMsg {
     int64 commitIndex = 1;
     repeated bytes appendLog = 2;
+}
+
+message ServerInnerStatusMsg {
+    int32 currentLeaderId = 1;
+    int32 state = 2;
+    int32 commitIndex = 3;
+    bool canVote = 4;
 }
 
 message RaftServerMsg {

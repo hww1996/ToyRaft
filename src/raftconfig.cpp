@@ -52,7 +52,7 @@ namespace ToyRaft {
     void RaftConfig::loadConfigWrap() {
         LOGDEBUG("start load config");
         while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(3 * 86400));
+            std::this_thread::sleep_for(std::chrono::seconds(10));
             if (0 != loadConfig()) {
                 break;
             }
