@@ -65,7 +65,7 @@ void dealResponse(const ToyRaft::RaftServerMsg &raftServerMsg, std::string &send
 
 int main() {
     int sendType = 0;
-    std::string sendName = "0.0.0.0:20086";
+    std::string sendName = "0.0.0.0:20087";
     while (true) {
         ToyRaft::LOGDEBUG("now ip:%s", sendName.c_str());
         if (std::cin.eof()) {
@@ -77,6 +77,7 @@ int main() {
         }
         switch (sendType) {
             case 0: { // append
+                std::cout << "append" << std::endl;
                 int readSize;
                 std::cin >> readSize;
                 ToyRaft::ClientAppendMsg clientAppendMsg;
@@ -102,6 +103,7 @@ int main() {
             }
                 break;
             case 1: { // query
+                std::cout << "query" << std::endl;
                 int start, end;
                 std::cin >> start >> end;
                 if (std::cin.eof()) {
@@ -125,6 +127,7 @@ int main() {
             }
                 break;
             case 2: { // member change
+                std::cout << "member change" << std::endl;
                 int memberChangeType, id; // 0:Add 1:Remove
                 std::cin >> memberChangeType >> id;
                 if (std::cin.eof()) {
@@ -132,11 +135,12 @@ int main() {
                 }
                 ToyRaft::ClientMemberChangeMsg clientMemberChangeMsg;
                 if (0 == memberChangeType) {
+                    std::cout << "add" << std::endl;
                     clientMemberChangeMsg.set_memberchangetype(ToyRaft::ClientMemberChangeMsg::ADD);
                     clientMemberChangeMsg.set_id(id);
                     std::string innerIP, outerIP;
                     int innerPort, outerPort;
-                    std::cin >> innerIP >> outerPort;
+                    std::cin >> innerIP >> outerIP;
                     if (std::cin.eof()) {
                         exit(0);
                     }
@@ -149,6 +153,7 @@ int main() {
                     clientMemberChangeMsg.set_outerip(outerIP);
                     clientMemberChangeMsg.set_outerport(outerPort);
                 } else if (1 == memberChangeType) {
+                    std::cout << "remove" << std::endl;
                     clientMemberChangeMsg.set_memberchangetype(ToyRaft::ClientMemberChangeMsg::REMOVE);
                     clientMemberChangeMsg.set_id(id);
                 }
@@ -166,7 +171,8 @@ int main() {
                 dealResponse(raftServerMsg, sendName, ToyRaft::RaftClientMsg::MEMBER);
             }
                 break;
-            case 3: { // 查询状态
+            case 3: { // status query
+                std::cout << "status query" << std::endl;
                 ToyRaft::ClientQueryInnerStatusMsg clientQueryInnerStatusMsg;
                 clientQueryInnerStatusMsg.set_id(0);
                 ToyRaft::RaftClientMsg raftClientMsg;

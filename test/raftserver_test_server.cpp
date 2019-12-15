@@ -11,11 +11,12 @@ int main(int argc, char **argv) {
         std::cout << "usage: <script> <path to config> <is add node>" << std::endl;
         exit(-1);
     }
-    ToyRaft::RaftServer raftServer(argv[1]);
     bool newNode = false;
     if (3 == argc) {
         newNode = true;
     }
+    std::cout<< newNode <<std::endl;
+    ToyRaft::RaftServer raftServer(argv[1]);
     raftServer.serverForever(newNode);
     return 0;
 }

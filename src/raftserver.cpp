@@ -46,6 +46,7 @@ namespace ToyRaft {
         ans.Accept(writer);
         std::string tempJsonString = buff.GetString();
         data.assign(tempJsonString);
+        LOGDEBUG("make the json OK.");
     }
 
     ::grpc::Status
@@ -126,6 +127,7 @@ namespace ToyRaft {
             }
                 break;
             case ::ToyRaft::RaftClientMsg::MEMBER: {
+                LOGDEBUG("in the member.");
                 switch (state) {
                     case FOLLOWER: {
                         auto nodes = RaftConfig::getNodes();
@@ -159,6 +161,7 @@ namespace ToyRaft {
                         auto changeId = clientMemberChangeMsg.id();
                         switch (clientMemberChangeMsg.memberchangetype()) {
                             case ClientMemberChangeMsg::ADD: {
+                                LOGDEBUG("in the add.");
                                 if (configNodes.find(changeId) != configNodes.end()) {
                                     response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                                     return sta;
@@ -171,6 +174,7 @@ namespace ToyRaft {
                             }
                                 break;
                             case ClientMemberChangeMsg::REMOVE: {
+                                LOGDEBUG("in the remove.");
                                 if (configNodes.find(changeId) == configNodes.end()) {
                                     response->set_sendbacktype(RaftServerMsg::UNKNOWN);
                                     return sta;
@@ -184,11 +188,17 @@ namespace ToyRaft {
                             }
                                 break;
                         }
+                        LOGDEBUG("begin append.");
                         std::string serializeData;
                         makeConfigData(configNodes, serializeData);
+                        ToyRaft::ClientAppendMsg clientAppendMsg;
+                        clientAppendMsg.add_appendlog()->assign(serializeData.c_str(), serializeData.size());
+                        std::string raftClientMsgBuf;
+                        clientAppendMsg.SerializeToString(&raftClientMsgBuf);
                         RaftClientMsg raftClientMsg;
-                        raftClientMsg.set_querytype(ToyRaft::RaftClientMsg::APPEND);
-                        raftClientMsg.set_clientbuf(serializeData.c_str(), serializeData.size());
+                        raftClientMsg.set_querytype(ToyRaft::RaftClientMsg::MEMBER);
+                        raftClientMsg.set_clientbuf(raftClientMsgBuf.c_str(), raftClientMsgBuf.size());
+                        LOGDEBUG("append OK.");
                         {
                             std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
                             RaftServer::requestBuf.push_back(raftClientMsg);
@@ -263,10 +273,11 @@ namespace ToyRaft {
         return ret;
     }
 
-    int RaftServer::getNetLogs(std::vector<std::string> &netLog) {
+    int RaftServer::getNetLogs(std::vector<ToyRaft::RaftLog> &netLog) {
         int ret = 0;
         while (true) {
             ClientAppendMsg clientAppendMsg;
+            RaftClientMsg::QueryType queryType;
             {
                 std::lock_guard<std::mutex> lock(GlobalMutex::requestMutex);
                 LOGDEBUG("requestBuf size:%d", requestBuf.size());
@@ -274,12 +285,20 @@ namespace ToyRaft {
                     break;
                 }
                 clientAppendMsg.ParseFromString(requestBuf.front().clientbuf());
+                queryType = requestBuf.front().querytype();
                 requestBuf.pop_front();
             }
             auto Logs = clientAppendMsg.appendlog();
             LOGDEBUG("log size:%d", requestBuf.size());
             for (auto &Log : Logs) {
-                netLog.emplace_back(Log.c_str(), Log.size());
+                RaftLog raftLog;
+                if (ToyRaft::RaftClientMsg::MEMBER == queryType) {
+                    raftLog.set_type(::ToyRaft::RaftLog::MEMBER);
+                } else {
+                    raftLog.set_type(::ToyRaft::RaftLog::APPEND);
+                }
+                raftLog.set_buf(Log.c_str(), Log.size());
+                netLog.push_back(raftLog);
             }
         }
         return ret;

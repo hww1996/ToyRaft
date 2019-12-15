@@ -32,7 +32,7 @@ namespace ToyRaft {
 
         static int recvFromNet();
 
-        static int getNetLogs(std::vector<std::string> &netLog);
+        static int getNetLogs(std::vector<ToyRaft::RaftLog> &netLog);
 
         static int pushReadBuffer(const std::vector<::ToyRaft::RaftLog> &log);
 
