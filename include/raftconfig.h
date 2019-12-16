@@ -45,9 +45,7 @@ namespace ToyRaft {
 
     private:
         enum RAFTCONFIG_ERR {
-            NO_ID = 1,
-            ID_NOT_NUM,
-            NO_NODES,
+            NO_NODES = 1,
             NODES_NOT_ARRAY,
             NODES_MEM_NOT_OBJ,
             NO_NODES_MEM_ID,
@@ -64,11 +62,15 @@ namespace ToyRaft {
 
         static void loadConfigWrap();
 
-        static int loadConfig();
+        static int loadDynamicConfig();
+
+        static int loadStaticConfig();
 
         static int id_;
 
         static std::string raftConfigPath_;
+        static std::string raftStaticConfigPath_;
+        static std::string raftDynamicConfigPath_;
         static std::atomic<int> nowBufIndex;
         static std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > NodesConf;
     };

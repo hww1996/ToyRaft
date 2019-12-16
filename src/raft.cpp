@@ -530,14 +530,7 @@ namespace ToyRaft {
                 LOGERROR("new config error.ret %d", ret);
                 return ret;
             }
-            rapidjson::Document doc;
-            doc.Parse(jsonData.c_str(), jsonData.size());
-            doc["id"].SetInt(id);
-            rapidjson::StringBuffer buff;
-            rapidjson::Writer<rapidjson::StringBuffer> writer(buff);
-            doc.Accept(writer);
-            std::string tempJsonString = buff.GetString();
-            return RaftConfig::flushConf(tempJsonString);
+            return RaftConfig::flushConf(jsonData);
         }
         return ret;
     }

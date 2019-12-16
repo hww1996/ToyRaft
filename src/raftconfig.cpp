@@ -24,16 +24,28 @@ namespace ToyRaft {
     int RaftConfig::id_;
 
     std::string RaftConfig::raftConfigPath_;
+    std::string RaftConfig::raftStaticConfigPath_;
+    std::string RaftConfig::raftDynamicConfigPath_;
 
     std::atomic<int> RaftConfig::nowBufIndex;
 
     std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > RaftConfig::NodesConf(2,
                                                                                               std::unordered_map<int, std::shared_ptr<NodeConfig> >());
 
+    static void loadJsonData(const std::string &Path, rapidjson::Document &doc) {
+        std::fstream file;
+        file.open(Path, std::fstream::in);
+        std::istreambuf_iterator<char> beg(file), end;
+        std::string jsonData(beg, end);
+        file.close();
+        doc.Parse(jsonData.c_str(), jsonData.size());
+    }
+
     RaftConfig::RaftConfig(const std::string &path) {
         raftConfigPath_ = path;
         nowBufIndex = 1;
-        loadConfig();
+        loadStaticConfig();
+        loadDynamicConfig();
         std::thread loadConfigThread(loadConfigWrap);
         loadConfigThread.detach();
     }
@@ -53,39 +65,48 @@ namespace ToyRaft {
         LOGDEBUG("start load config");
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(10));
-            if (0 != loadConfig()) {
+            if (0 != loadDynamicConfig()) {
                 break;
             }
         }
     }
 
-    int RaftConfig::loadConfig() {
+    int RaftConfig::loadStaticConfig() {
+        int ret = 0;
+        rapidjson::Document configDoc;
+        loadJsonData(raftConfigPath_, configDoc);
+        raftStaticConfigPath_ = configDoc["static_config_file"].GetString();
+        raftDynamicConfigPath_ = configDoc["dynamic_config_file"].GetString();
+
+        // 静态文件load
+        rapidjson::Document staticConfig;
+        loadJsonData(raftStaticConfigPath_, staticConfig);
+        assert(staticConfig.HasMember("id"));
+        const rapidjson::Value &nodeId = staticConfig["id"];
+        assert(nodeId.IsNumber());
+        id_ = nodeId.GetInt();
+        return ret;
+    }
+
+    int RaftConfig::loadDynamicConfig() {
         int ret = 0;
 
         // 这里需要采取rename的方式写入文件，因为rename在操作系统层面是原子操作
         // 共享读影响
-        std::fstream file;
-        file.open(raftConfigPath_, std::fstream::in);
-        std::istreambuf_iterator<char> beg(file), end;
-        std::string jsonData(beg, end);
-        file.close();
 
+        // 动态文件load
+
+        rapidjson::Document dynamicConfig;
+        loadJsonData(raftDynamicConfigPath_, dynamicConfig);
         int secondConfIndex = 1 - nowBufIndex.load();
 
         auto &secondConf = NodesConf[secondConfIndex];
 
         clearNodesConf(secondConf);
 
-        rapidjson::Document doc;
-        doc.Parse(jsonData.c_str(), jsonData.size());
 
-        assert(doc.HasMember("id"));
-        const rapidjson::Value &nodeId = doc["id"];
-        assert(nodeId.IsNumber());
-        id_ = nodeId.GetInt();
-
-        assert(doc.HasMember("nodes"));
-        const rapidjson::Value &nodes = doc["nodes"];
+        assert(dynamicConfig.HasMember("nodes"));
+        const rapidjson::Value &nodes = dynamicConfig["nodes"];
         assert(nodes.IsArray());
         for (rapidjson::SizeType i = 0; i < nodes.Size(); i++) {
 
@@ -143,20 +164,12 @@ namespace ToyRaft {
         file.open(tempFileName, std::fstream::out | std::fstream::binary);
         file << b;
         file.close();
-        return rename(tempFileName.c_str(), raftConfigPath_.c_str());
+        return rename(tempFileName.c_str(), raftDynamicConfigPath_.c_str());
     }
 
     int RaftConfig::checkConfig(const std::string &jsonData) {
         rapidjson::Document doc;
         doc.Parse(jsonData.c_str(), jsonData.size());
-
-        if (!doc.HasMember("id")) {
-            return RAFTCONFIG_ERR::NO_ID;
-        }
-        const rapidjson::Value &nodeId = doc["id"];
-        if (!nodeId.IsNumber()) {
-            return RAFTCONFIG_ERR::ID_NOT_NUM;
-        }
 
         if (!doc.HasMember("nodes")) {
             return RAFTCONFIG_ERR::NO_NODES;
