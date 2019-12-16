@@ -27,8 +27,6 @@ namespace ToyRaft {
         rapidjson::Value raftNodes(rapidjson::kArrayType);
         rapidjson::Document document;
         rapidjson::Document::AllocatorType &alloc = document.GetAllocator();
-
-        ans.AddMember("id", rapidjson::Value().SetInt(RaftConfig::getId()), alloc);
         for (auto it = config.begin(); config.end() != it; ++it) {
             rapidjson::Value raftNodeItem(rapidjson::kObjectType);
             raftNodeItem.AddMember("id", rapidjson::Value().SetInt(it->first), alloc);

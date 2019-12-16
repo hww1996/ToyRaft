@@ -1,26 +1,4 @@
 {
-  "id": 2,
-  "nodes": [
-    {
-      "id": 1,
-      "innerIP": "127.0.0.1",
-      "innerPort": 10086,
-      "outerIP": "0.0.0.0",
-      "outerPort": 20086
-    },
-    {
-      "id": 2,
-      "innerIP": "127.0.0.1",
-      "innerPort": 10087,
-      "outerIP": "0.0.0.0",
-      "outerPort": 20087
-    },
-    {
-      "id": 3,
-      "innerIP": "127.0.0.1",
-      "innerPort": 10088,
-      "outerIP": "0.0.0.0",
-      "outerPort": 20088
-    }
-  ]
+  "static_config_file":"../conf_test/raft2/static.json",
+  "dynamic_config_file":"../conf_test/raft2/dynamic.json"
 }
