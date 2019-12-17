@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 11)
 
 find_package(RapidJSON REQUIRED)
 
+find_package(leveldb REQUIRED)
+
 find_package(Protobuf REQUIRED)
 
 aux_source_directory(src toyraft_src)
@@ -12,7 +14,8 @@ aux_source_directory(src toyraft_src)
 set(Protobuf_USE_STATIC_LIBS ON)
 
 file(GLOB GLOB_PROTOS "proto/*.proto")
-set(GRPC_CPP_PLUGIN /usr/local/bin/grpc_cpp_plugin)
+
+execute_process(COMMAND which grpc_cpp_plugin OUTPUT_VARIABLE GRPC_CPP_PLUGIN OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 foreach (protofile ${GLOB_PROTOS})
 
