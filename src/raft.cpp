@@ -16,42 +16,13 @@
 #include "raftconfig.h"
 #include "raftserver.h"
 #include "globalmutex.h"
+#include "raftsave.h"
 #include "logger.h"
 
 namespace ToyRaft {
     static int64_t min(int64_t a, int64_t b) {
         return a > b ? b : a;
     }
-
-    int64_t OuterRaftStatus::leaderId_ = -1;
-    Status OuterRaftStatus::state_ = FOLLOWER;
-    int64_t OuterRaftStatus::commitIndex_ = -1;
-    bool OuterRaftStatus::canVote_ = true;
-
-    int OuterRaftStatus::push(int64_t leaderId, Status state, int64_t commitIndex, bool canVote) {
-        int ret = 0;
-        {
-            std::lock_guard<std::mutex> lock(GlobalMutex::OuterRaftStatusMutex);
-            leaderId_ = leaderId;
-            state_ = state;
-            commitIndex_ = commitIndex;
-            canVote_ = canVote;
-        }
-        return ret;
-    }
-
-    int OuterRaftStatus::get(int64_t &leaderId, Status &state, int64_t &commitIndex, bool &canVote) {
-        int ret = 0;
-        {
-            std::lock_guard<std::mutex> lock(GlobalMutex::OuterRaftStatusMutex);
-            leaderId = leaderId_;
-            state = state_;
-            commitIndex = commitIndex_;
-            canVote = canVote_;
-        }
-        return ret;
-    }
-
 
     Peers::Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex) : id(nodeId),
                                                                                     nextIndex(peersNextIndex),
@@ -81,6 +52,7 @@ namespace ToyRaft {
         srand(static_cast<unsigned int>(seed));
         int standerElectionTimeOut = heartBeatTimeout * 10;
         electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
+        packageStatus();
     }
 
 
@@ -89,9 +61,10 @@ namespace ToyRaft {
      * @return 返回错误码
      */
     int Raft::tick() {
-        LOGDEBUG("leader:%d,status:%d,commit:%d,lastapplied:%d,electionTimeout:%d,timeTick:%d,term:%d,log size:%d",
-                 currentLeaderId, state, commitIndex, lastAppliedIndex, electionTimeout, timeTick, currentTerm,
-                 log.size());
+        LOGDEBUG(
+                "leader:%d,status:%d,leaderCommit:%d,lastapplied:%d,electionTimeout:%d,timeTick:%d,term:%d,log size:%d",
+                currentLeaderId, state, commitIndex, lastAppliedIndex, electionTimeout, timeTick, currentTerm,
+                log.size());
         int ret = 0;
 
         if (!RaftConfig::checkNodeExists(id)) {
@@ -114,7 +87,7 @@ namespace ToyRaft {
 
         if (Status::LEADER == state) {
             timeTick = 0;
-            commit();
+            leaderCommit();
             ret = sendRequestAppend();
             if (0 != ret) {
                 return ret;
@@ -126,9 +99,7 @@ namespace ToyRaft {
         if (0 != ret) {
             return ret;
         }
-        // 外面能获取的状态
-        ret = RaftServer::pushReadBuffer(log);
-        ret = OuterRaftStatus::push(currentLeaderId, state, commitIndex, canVote);
+        packageStatus();
         updatePeers();
         return ret;
     }
@@ -428,10 +399,13 @@ namespace ToyRaft {
                         log.push_back(appendEntries[entriesIndex++]);
                         LogIndex++;
                     }
+                    int64_t  lastCommit = commitIndex;
                     commitIndex = min(requestAppend.leadercommit(), static_cast<int>(log.size()) - 1);
+                    ret = logToStable(lastCommit + 1, commitIndex - lastCommit);
                     if (commitIndex > lastAppliedIndex) {
                         ret = apply();
                     }
+                    ret = packageStatus();
                     appendRsp.set_term(currentTerm);
                     appendRsp.set_lastlogindex(static_cast<int>(log.size()) - 1);
                     appendRsp.set_success(true);
@@ -491,7 +465,7 @@ namespace ToyRaft {
      * @brief 提交还未提交的日志
      * @return
      */
-    int Raft::commit() {
+    int Raft::leaderCommit() {
         int ret = 0;
         std::vector<int> commitCount(log.size() - 1 - commitIndex, 1);
         for (auto nodeIt = nodes.begin(); nodes.end() != nodeIt; ++nodeIt) {
@@ -509,12 +483,15 @@ namespace ToyRaft {
                 break;
             }
         }
+        int64_t lastCommit = commitIndex;
         if (i >= 0 && log[commitIndex + i + 1].term() == currentTerm) {
             commitIndex = commitIndex + i + 1;
         }
+        ret = logToStable(lastCommit + 1, commitIndex - lastCommit);
         if (commitIndex > lastAppliedIndex) {
             ret = apply();
         }
+        ret = packageStatus();
         return ret;
     }
 
@@ -533,6 +510,14 @@ namespace ToyRaft {
             return RaftConfig::flushConf(jsonData);
         }
         return ret;
+    }
+
+    int Raft::logToStable(int start, int size) {
+        std::vector<std::string> saveLog(size);
+        for (int i = 0; i < size; i++) {
+            saveLog[i] = log[start+i].buf();
+        }
+        return RaftSave::getInstance()->saveData(start, saveLog);
     }
 
     int Raft::updatePeers() {
@@ -568,6 +553,22 @@ namespace ToyRaft {
             nodes.erase(removeId);
         }
         return 0;
+    }
+
+    int Raft::packageStatus() {
+        rapidjson::Value ans(rapidjson::kObjectType);
+        rapidjson::Document document;
+        rapidjson::Document::AllocatorType &alloc = document.GetAllocator();
+        ans.AddMember("leaderId", rapidjson::Value().SetInt(currentLeaderId), alloc);
+        ans.AddMember("status", rapidjson::Value().SetInt(state), alloc);
+        ans.AddMember("commitIndex", rapidjson::Value().SetInt(commitIndex), alloc);
+        ans.AddMember("applied", rapidjson::Value().SetInt(lastAppliedIndex), alloc);
+        ans.AddMember("canVote", rapidjson::Value().SetBool(canVote), alloc);
+        rapidjson::StringBuffer buff;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buff);
+        ans.Accept(writer);
+        std::string tempJsonString = buff.GetString();
+        return RaftSave::getInstance()->saveMeta(tempJsonString);
     }
 
     /**

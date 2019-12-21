@@ -118,3 +118,5 @@ cmake-build-debug/
 .DS_Store
 
 conf_test/
+
+save_test/

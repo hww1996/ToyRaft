@@ -34,12 +34,9 @@ namespace ToyRaft {
 
         static int getNetLogs(std::vector<ToyRaft::RaftLog> &netLog);
 
-        static int pushReadBuffer(const std::vector<::ToyRaft::RaftLog> &log);
-
         static int getReadBuffer(::ToyRaft::ServerQueryMsg &serverQueryMsg, int from, int to, int commit);
 
         static std::deque<::ToyRaft::RaftClientMsg> requestBuf;
-        static std::vector<std::string> readBuffer;
 
         friend class Raft;
 

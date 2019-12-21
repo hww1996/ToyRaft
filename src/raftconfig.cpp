@@ -26,6 +26,7 @@ namespace ToyRaft {
     std::string RaftConfig::raftConfigPath_;
     std::string RaftConfig::raftStaticConfigPath_;
     std::string RaftConfig::raftDynamicConfigPath_;
+    std::string RaftConfig::raftSavePath_;
 
     std::atomic<int> RaftConfig::nowBufIndex;
 
@@ -85,6 +86,10 @@ namespace ToyRaft {
         const rapidjson::Value &nodeId = staticConfig["id"];
         assert(nodeId.IsNumber());
         id_ = nodeId.GetInt();
+        assert(staticConfig.HasMember("save_path"));
+        const rapidjson::Value &savePath = staticConfig["save_path"];
+        assert(savePath.IsString());
+        raftSavePath_ = savePath.GetString();
         return ret;
     }
 
@@ -214,5 +219,9 @@ namespace ToyRaft {
             }
         }
         return 0;
+    }
+
+    std::string RaftConfig::getRaftSavePath() {
+        return raftSavePath_;
     }
 }// namespace ToyRaft

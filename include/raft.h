@@ -23,19 +23,6 @@ namespace ToyRaft {
         Peers(int64_t nodeId, int64_t peersNextIndex, int64_t peersMatchIndex);
     };
 
-    class OuterRaftStatus {
-    public:
-        static int push(int64_t leaderId, Status state, int64_t commitIndex, bool canVote);
-
-        static int get(int64_t &leaderId, Status &state, int64_t &commitIndex, bool &canVote);
-
-    private:
-        static int64_t leaderId_;
-        static Status state_;
-        static int64_t commitIndex_;
-        static bool canVote_;
-    };
-
     class Raft {
     public:
         Raft(bool votable = true);
@@ -68,7 +55,9 @@ namespace ToyRaft {
 
         int handleRequestAppendResponse(const ::ToyRaft::RequestAppendResponse &, int64_t sendFrom);
 
-        int commit();
+        int leaderCommit();
+
+        int logToStable(int start, int size);
 
         int apply();
 
@@ -78,7 +67,8 @@ namespace ToyRaft {
         // 更新集群
         int updatePeers();
 
-        //TODO : 添加的节点不能进行选举，添加个开关，外界能查询这个开关。
+        // 打包状态
+        int packageStatus();
 
         // 任期相关
         int64_t id;

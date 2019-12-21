@@ -16,10 +16,10 @@
 #include "raft.h"
 #include "raftconnect.h"
 #include "logger.h"
+#include "raftsave.h"
 
 namespace ToyRaft {
     std::deque<::ToyRaft::RaftClientMsg> RaftServer::requestBuf;
-    std::vector<std::string> RaftServer::readBuffer;
 
     static void makeConfigData(std::unordered_map<int, std::shared_ptr<NodeConfig> > &config, std::string &data) {
         // 将config变成json，并放到append的log中。
@@ -47,6 +47,21 @@ namespace ToyRaft {
         LOGDEBUG("make the json OK.");
     }
 
+    static int getStatus(int64_t &leaderId, Status &state, int64_t &commitIndex, bool &canVote) {
+        std::string statusJson;
+        int ret = RaftSave::getInstance()->getMeta(statusJson);
+        if (0 != ret) {
+            return ret;
+        }
+        rapidjson::Document doc;
+        doc.Parse(statusJson.c_str(), statusJson.size());
+        leaderId = doc["leaderId"].GetInt();
+        state = Status(doc["status"].GetInt());
+        commitIndex = doc["commitIndex"].GetInt();
+        canVote = doc["canVote"].GetBool();
+        return ret;
+    }
+
     ::grpc::Status
     OuterServiceImpl::serverOutSide(::grpc::ServerContext *context, const ::ToyRaft::RaftClientMsg *request,
                                     ::ToyRaft::RaftServerMsg *response) {
@@ -55,7 +70,7 @@ namespace ToyRaft {
         Status state = FOLLOWER;
         int64_t commitIndex = -1;
         bool canVote = false;
-        int ret = OuterRaftStatus::get(currentLeaderId, state, commitIndex, canVote);
+        int ret = getStatus(currentLeaderId, state, commitIndex, canVote);
         if (0 != ret) {
             response->set_sendbacktype(RaftServerMsg::RETRY);
             return sta;
@@ -302,37 +317,21 @@ namespace ToyRaft {
         return ret;
     }
 
-    int RaftServer::pushReadBuffer(const std::vector<::ToyRaft::RaftLog> &log) {
-        int ret = 0;
-        {
-            std::lock_guard<std::mutex> lock(GlobalMutex::readBufferMutex);
-            int index = 0;
-            for (; index < readBuffer.size(); index++) {
-                readBuffer[index].assign(log[index].buf().c_str(), log[index].buf().size());
-            }
-            for (; index < log.size(); index++) {
-                readBuffer.emplace_back(log[index].buf().c_str(), log[index].buf().size());
-            }
-        }
-        return ret;
-    }
-
     int RaftServer::getReadBuffer(::ToyRaft::ServerQueryMsg &serverQueryMsg, int from, int to, int commit) {
         int ret = 0;
-        {
-            std::lock_guard<std::mutex> lock(GlobalMutex::readBufferMutex);
-            if (from < 0) {
-                return -1;
-            }
-            if (from >= to) {
-                return -2;
-            }
-            if (to > commit + 1) {
-                to = commit + 1;
-            }
-            for (int i = from; i < to; i++) {
-                serverQueryMsg.add_appendlog(readBuffer[i].c_str(), readBuffer[i].size());
-            }
+        if (from < 0) {
+            return -1;
+        }
+        if (from >= to) {
+            return -2;
+        }
+        if (to > commit + 1) {
+            to = commit + 1;
+        }
+        std::vector<std::string> ans;
+        ret = RaftSave::getInstance()->getData(from, to - from, ans);
+        for (int i = 0; i < ans.size(); i++) {
+            serverQueryMsg.add_appendlog(ans[i].c_str(), ans[i].size());
         }
         serverQueryMsg.set_commitindex(commit);
         return ret;
