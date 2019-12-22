@@ -46,7 +46,8 @@ namespace ToyRaft {
         int ret = 0;
         for (int i = 0; i < data.size(); i++) {
             std::string key = getKey(start + i);
-            leveldb::Status s = db->Put(leveldb::WriteOptions(), key, data[i]);
+            leveldb::Slice tempData(data[i].c_str(), data[i].size());
+            leveldb::Status s = db->Put(leveldb::WriteOptions(), key, tempData);
             if (!s.ok()) {
                 return -1;
             }
