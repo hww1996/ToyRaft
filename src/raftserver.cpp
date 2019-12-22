@@ -331,7 +331,9 @@ namespace ToyRaft {
         std::vector<std::string> ans;
         ret = RaftSave::getInstance()->getData(from, to - from, ans);
         for (int i = 0; i < ans.size(); i++) {
-            serverQueryMsg.add_appendlog(ans[i].c_str(), ans[i].size());
+            RaftLog log;
+            log.ParseFromString(ans[i]);
+            serverQueryMsg.add_appendlog(log.buf());
         }
         serverQueryMsg.set_commitindex(commit);
         return ret;

@@ -40,7 +40,7 @@ include_directories(include ${PROTOBUF_INCLUDE_DIRS} ${proto_include} ${RapidJSO
 
 add_library(ToyRaft STATIC ${toyraft_src} ${proto_src} ${grpc_src})
 
-target_link_libraries(ToyRaft grpc++ grpc pthread ${PROTOBUF_LIBRARIES})
+target_link_libraries(ToyRaft grpc++ grpc leveldb pthread ${PROTOBUF_LIBRARIES})
 
 if(COMPILED_TEST)
     add_executable(logger_test test/logger_test.cpp)

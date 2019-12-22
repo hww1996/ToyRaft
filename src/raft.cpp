@@ -52,6 +52,7 @@ namespace ToyRaft {
         srand(static_cast<unsigned int>(seed));
         int standerElectionTimeOut = heartBeatTimeout * 10;
         electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
+        recoverStatus();
         packageStatus();
     }
 
@@ -515,7 +516,9 @@ namespace ToyRaft {
     int Raft::logToStable(int start, int size) {
         std::vector<std::string> saveLog(size);
         for (int i = 0; i < size; i++) {
-            saveLog[i] = log[start+i].buf();
+            std::string logIndexSerialize;
+            log[i].SerializeToString(&logIndexSerialize);
+            saveLog[i].assign(logIndexSerialize);
         }
         return RaftSave::getInstance()->saveData(start, saveLog);
     }
@@ -569,6 +572,29 @@ namespace ToyRaft {
         ans.Accept(writer);
         std::string tempJsonString = buff.GetString();
         return RaftSave::getInstance()->saveMeta(tempJsonString);
+    }
+
+    int Raft::recoverStatus() {
+        std::string statusStr;
+        int ret = RaftSave::getInstance()->getMeta(statusStr);
+        if (ret < 0) {
+            return 0;
+        }
+        rapidjson::Document doc;
+        doc.Parse(statusStr.c_str(), statusStr.size());
+        commitIndex = doc["commitIndex"].GetInt();
+        lastAppliedIndex = doc["applied"].GetInt();
+        std::vector<std::string> arr;
+        RaftSave::getInstance()->getData(0, commitIndex + 1, arr);
+        log.resize(arr.size());
+        commitIndex = arr.size() - 1;
+        if (lastAppliedIndex > commitIndex) {
+            lastAppliedIndex = commitIndex;
+        }
+        for (int i = 0; i < arr.size(); i++) {
+            log[i].ParseFromString(arr[i]);
+        }
+        return ret;
     }
 
     /**

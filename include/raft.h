@@ -70,6 +70,9 @@ namespace ToyRaft {
         // 打包状态
         int packageStatus();
 
+        //  恢复原来的log的状态，读取内容到内容中
+        int recoverStatus();
+
         // 任期相关
         int64_t id;
         int64_t currentTerm;
