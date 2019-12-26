@@ -65,7 +65,7 @@ void dealResponse(const ToyRaft::RaftServerMsg &raftServerMsg, std::string &send
 
 int main() {
     int sendType = 0;
-    std::string sendName = "0.0.0.0:20087";
+    std::string sendName = "0.0.0.0:20086";
     while (true) {
         ToyRaft::LOGDEBUG("now ip:%s", sendName.c_str());
         if (std::cin.eof()) {
