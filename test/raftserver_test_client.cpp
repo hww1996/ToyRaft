@@ -24,7 +24,7 @@ void dealResponse(const ToyRaft::RaftServerMsg &raftServerMsg, std::string &send
                 ToyRaft::LOGDEBUG("query the log OK.");
                 ToyRaft::ServerQueryMsg serverQueryMsg;
                 serverQueryMsg.ParseFromString(raftServerMsg.serverbuf());
-                ToyRaft::LOGDEBUG("get the raft commit:%d", serverQueryMsg.commitindex());
+                ToyRaft::LOGDEBUG("get the raft leaderCommit:%d", serverQueryMsg.commitindex());
                 auto &retLog = serverQueryMsg.appendlog();
                 ToyRaft::LOGDEBUG("return log length is %d", retLog.size());
                 for (int i = 0; i < retLog.size(); i++) {
@@ -65,7 +65,7 @@ void dealResponse(const ToyRaft::RaftServerMsg &raftServerMsg, std::string &send
 
 int main() {
     int sendType = 0;
-    std::string sendName = "0.0.0.0:20087";
+    std::string sendName = "0.0.0.0:20086";
     while (true) {
         ToyRaft::LOGDEBUG("now ip:%s", sendName.c_str());
         if (std::cin.eof()) {

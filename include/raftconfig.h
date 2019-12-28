@@ -39,6 +39,8 @@ namespace ToyRaft {
 
         static bool checkNodeExists(int64_t id);
 
+        static std::string getRaftSavePath();
+
         static int flushConf(const std::string &b);
 
         static int checkConfig(const std::string &jsonData);
@@ -71,6 +73,7 @@ namespace ToyRaft {
         static std::string raftConfigPath_;
         static std::string raftStaticConfigPath_;
         static std::string raftDynamicConfigPath_;
+        static std::string raftSavePath_;
         static std::atomic<int> nowBufIndex;
         static std::vector<std::unordered_map<int, std::shared_ptr<NodeConfig> > > NodesConf;
     };

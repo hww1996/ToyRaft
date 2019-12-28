@@ -1,3 +1,4 @@
 {
-  "id": 4
+  "id": 4,
+  "save_path" : "../save_test/raft4"
 }

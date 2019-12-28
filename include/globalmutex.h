@@ -12,8 +12,7 @@ namespace ToyRaft {
         static std::mutex recvBufMutex;
         static std::mutex sendBufMutex;
         static std::mutex requestMutex;
-        static std::mutex readBufferMutex;
-        static std::mutex OuterRaftStatusMutex;
+        static std::mutex raftSaveMutex;
     };
 }// namespace ToyRaft
 #endif //TOYRAFT_GLOBALMUTEXT_H
