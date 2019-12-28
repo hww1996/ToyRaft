@@ -453,7 +453,12 @@ namespace ToyRaft {
                     node->matchIndex = requestAppendResponse.lastlogindex();
                     node->nextIndex = node->matchIndex + 1;
                 } else {
-                    if (0 != node->nextIndex) {
+                    size_t peersLastLog = requestAppendResponse.lastlogindex() + 1;
+                    size_t selfLastLog = log.size();
+                    if (requestAppendResponse.lastlogindex() + 1 <= log.size()) {
+                        node->nextIndex = peersLastLog > selfLastLog ? selfLastLog : peersLastLog;
+                    }
+                    else if (0 != node->nextIndex) {
                         node->nextIndex--;
                     }
                 }
@@ -515,9 +520,10 @@ namespace ToyRaft {
 
     int Raft::logToStable(int start, int size) {
         std::vector<std::string> saveLog(size);
+        int logIndex = start;
         for (int i = 0; i < size; i++) {
             std::string logIndexSerialize;
-            log[i].SerializeToString(&logIndexSerialize);
+            log[logIndex++].SerializeToString(&logIndexSerialize);
             saveLog[i].assign(logIndexSerialize);
         }
         return RaftSave::getInstance()->saveData(start, saveLog);
