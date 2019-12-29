@@ -52,6 +52,7 @@ namespace ToyRaft {
         srand(static_cast<unsigned int>(seed));
         int standerElectionTimeOut = heartBeatTimeout * 10;
         electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
+        selfConfIndex = -1;
         recoverStatus();
         packageStatus();
     }
@@ -506,7 +507,7 @@ namespace ToyRaft {
         lastAppliedIndex++;
         auto &appliedLog = log[lastAppliedIndex];
         LOGERROR("applied type:%d", appliedLog.type());
-        if (ToyRaft::RaftLog::MEMBER == appliedLog.type()) {
+        if (lastAppliedIndex == selfConfIndex && ToyRaft::RaftLog::MEMBER == appliedLog.type()) {
             const std::string &jsonData = appliedLog.buf();
             ret = RaftConfig::checkConfig(jsonData);
             if (0 != ret) {
@@ -519,13 +520,22 @@ namespace ToyRaft {
     }
 
     int Raft::logToStable(int start, int size) {
+        int ret = 0;
         std::vector<std::string> saveLog(size);
         int logIndex = start;
+        int lastConfigIndex = selfConfIndex;
         for (int i = 0; i < size; i++) {
+            if (RaftLog::MEMBER == log[logIndex].type()) {
+                if (logIndex > lastConfigIndex) {
+                    lastConfigIndex = logIndex;
+                }
+            }
             std::string logIndexSerialize;
-            log[logIndex++].SerializeToString(&logIndexSerialize);
+            log[logIndex].SerializeToString(&logIndexSerialize);
             saveLog[i].assign(logIndexSerialize);
+            logIndex++;
         }
+        selfConfIndex = lastConfigIndex;
         return RaftSave::getInstance()->saveData(start, saveLog);
     }
 
@@ -573,6 +583,7 @@ namespace ToyRaft {
         ans.AddMember("commitIndex", rapidjson::Value().SetInt(commitIndex), alloc);
         ans.AddMember("applied", rapidjson::Value().SetInt(lastAppliedIndex), alloc);
         ans.AddMember("canVote", rapidjson::Value().SetBool(canVote), alloc);
+        ans.AddMember("selfConfIndex", rapidjson::Value().SetInt(selfConfIndex), alloc);
         rapidjson::StringBuffer buff;
         rapidjson::Writer<rapidjson::StringBuffer> writer(buff);
         ans.Accept(writer);
@@ -590,6 +601,7 @@ namespace ToyRaft {
         doc.Parse(statusStr.c_str(), statusStr.size());
         commitIndex = doc["commitIndex"].GetInt();
         lastAppliedIndex = doc["applied"].GetInt();
+        selfConfIndex = doc["selfConfIndex"].GetInt();
         std::vector<std::string> arr;
         RaftSave::getInstance()->getData(0, commitIndex + 1, arr);
         log.resize(arr.size());
