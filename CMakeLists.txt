@@ -36,6 +36,8 @@ foreach (protofile ${GLOB_PROTOS})
             ${proto_src_cc}.proto)
 endforeach ()
 
+link_directories(/usr/local/lib)
+
 include_directories(include ${PROTOBUF_INCLUDE_DIRS} ${proto_include} ${RapidJSON_INCLUDE_DIR})
 
 add_library(ToyRaft STATIC ${toyraft_src} ${proto_src} ${grpc_src})
