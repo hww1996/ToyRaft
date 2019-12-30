@@ -78,6 +78,9 @@ namespace ToyRaft {
         int64_t currentTerm;
         int64_t currentLeaderId;
 
+        // member change 相关
+        int selfConfIndex;
+
         std::vector<::ToyRaft::RaftLog> log;
         int64_t commitIndex;
         int64_t lastAppliedIndex;
