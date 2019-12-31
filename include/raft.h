@@ -80,6 +80,7 @@ namespace ToyRaft {
 
         // member change 相关
         int selfConfIndex;
+        int leaderConfIndex;
 
         std::vector<::ToyRaft::RaftLog> log;
         int64_t commitIndex;

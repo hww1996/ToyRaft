@@ -53,6 +53,7 @@ namespace ToyRaft {
         int standerElectionTimeOut = heartBeatTimeout * 10;
         electionTimeout = standerElectionTimeOut + rand() % standerElectionTimeOut;
         selfConfIndex = -1;
+        leaderConfIndex = -1;
         recoverStatus();
         packageStatus();
     }
@@ -234,6 +235,7 @@ namespace ToyRaft {
                     requestAppend.set_term(currentTerm);
                     requestAppend.set_currentleaderid(id);
                     requestAppend.set_leadercommit(commitIndex);
+                    requestAppend.set_leaderconfindex(leaderConfIndex);
                     requestAppend.set_prelogindex(nodeIter->second->nextIndex - 1);
                     if (log.empty()) {
                         requestAppend.set_prelogterm(-1);
@@ -401,9 +403,15 @@ namespace ToyRaft {
                         log.push_back(appendEntries[entriesIndex++]);
                         LogIndex++;
                     }
-                    int64_t  lastCommit = commitIndex;
+                    int64_t lastCommit = commitIndex;
                     commitIndex = min(requestAppend.leadercommit(), static_cast<int>(log.size()) - 1);
                     ret = logToStable(lastCommit + 1, commitIndex - lastCommit);
+                    int nowLeaderConfIndex = requestAppend.leaderconfindex();
+                    if (commitIndex >= nowLeaderConfIndex && -1 != nowLeaderConfIndex &&
+                        nowLeaderConfIndex > leaderConfIndex &&
+                        log[nowLeaderConfIndex].type() == ToyRaft::RaftLog::MEMBER) {
+                        leaderConfIndex = nowLeaderConfIndex;
+                    }
                     if (commitIndex > lastAppliedIndex) {
                         ret = apply();
                     }
@@ -458,8 +466,7 @@ namespace ToyRaft {
                     size_t selfLastLog = log.size();
                     if (requestAppendResponse.lastlogindex() + 1 <= log.size()) {
                         node->nextIndex = peersLastLog > selfLastLog ? selfLastLog : peersLastLog;
-                    }
-                    else if (0 != node->nextIndex) {
+                    } else if (0 != node->nextIndex) {
                         node->nextIndex--;
                     }
                 }
@@ -507,6 +514,10 @@ namespace ToyRaft {
         lastAppliedIndex++;
         auto &appliedLog = log[lastAppliedIndex];
         LOGERROR("applied type:%d", appliedLog.type());
+        if (leaderConfIndex != -1 && ToyRaft::RaftLog::MEMBER == log[leaderConfIndex].type() &&
+            leaderConfIndex > selfConfIndex) {
+            selfConfIndex = leaderConfIndex;
+        }
         if (lastAppliedIndex == selfConfIndex && ToyRaft::RaftLog::MEMBER == appliedLog.type()) {
             const std::string &jsonData = appliedLog.buf();
             ret = RaftConfig::checkConfig(jsonData);
@@ -535,7 +546,9 @@ namespace ToyRaft {
             saveLog[i].assign(logIndexSerialize);
             logIndex++;
         }
-        selfConfIndex = lastConfigIndex;
+        if (LEADER == state) {
+            leaderConfIndex = lastConfigIndex;
+        }
         return RaftSave::getInstance()->saveData(start, saveLog);
     }
 
@@ -584,6 +597,7 @@ namespace ToyRaft {
         ans.AddMember("applied", rapidjson::Value().SetInt(lastAppliedIndex), alloc);
         ans.AddMember("canVote", rapidjson::Value().SetBool(canVote), alloc);
         ans.AddMember("selfConfIndex", rapidjson::Value().SetInt(selfConfIndex), alloc);
+        ans.AddMember("leaderConfIndex", rapidjson::Value().SetInt(leaderConfIndex), alloc);
         rapidjson::StringBuffer buff;
         rapidjson::Writer<rapidjson::StringBuffer> writer(buff);
         ans.Accept(writer);
@@ -602,6 +616,7 @@ namespace ToyRaft {
         commitIndex = doc["commitIndex"].GetInt();
         lastAppliedIndex = doc["applied"].GetInt();
         selfConfIndex = doc["selfConfIndex"].GetInt();
+        leaderConfIndex = doc["leaderConfIndex"].GetInt();
         std::vector<std::string> arr;
         RaftSave::getInstance()->getData(0, commitIndex + 1, arr);
         log.resize(arr.size());
