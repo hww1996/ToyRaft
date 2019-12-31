@@ -7,6 +7,7 @@
 #include <thread>
 #include <iterator>
 #include <cstdio>
+#include <atomic>
 
 #include <rapidjson/document.h>
 
