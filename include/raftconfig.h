@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <memory>
 
 #ifndef TOYRAFT_CONFIG_H
 #define TOYRAFT_CONFIG_H
