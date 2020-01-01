@@ -13,6 +13,7 @@
 #include "logger.h"
 #include "raftserver.pb.h"
 #include "raftserver.grpc.pb.h"
+#include "raft.pb.h"
 
 void dealResponse(const ToyRaft::RaftServerMsg &raftServerMsg, std::string &sendName,
                   ToyRaft::RaftClientMsg::QueryType clientType) {
@@ -28,16 +29,16 @@ void dealResponse(const ToyRaft::RaftServerMsg &raftServerMsg, std::string &send
                 auto &retLog = serverQueryMsg.appendlog();
                 ToyRaft::LOGDEBUG("return log length is %d", retLog.size());
                 for (int i = 0; i < retLog.size(); i++) {
-                    ToyRaft::LOGDEBUG("index:%d.log content:%s", i, retLog[i].c_str());
+                    ToyRaft::RaftLog reallog;
+                    reallog.ParseFromString(retLog[i]);
+                    ToyRaft::LOGDEBUG("index:%d.log type: %d,log content:%s", i, reallog.type(), reallog.buf().c_str());
                 }
             } else if (ToyRaft::RaftClientMsg::MEMBER == clientType) {
                 ToyRaft::LOGDEBUG("member change OK.");
             } else if (ToyRaft::RaftClientMsg::STATUS == clientType) {
                 ToyRaft::ServerInnerStatusMsg serverInnerStatusMsg;
                 serverInnerStatusMsg.ParseFromString(raftServerMsg.serverbuf());
-                ToyRaft::LOGDEBUG("leaderId:%d,commitId:%d,state:%d,canvote:%d", serverInnerStatusMsg.currentleaderid(),
-                                  serverInnerStatusMsg.commitindex(), serverInnerStatusMsg.state(),
-                                  serverInnerStatusMsg.canvote());
+                ToyRaft::LOGDEBUG("the inner status is:%s", serverInnerStatusMsg.innerstatus().c_str());
             }
         }
             break;

@@ -230,10 +230,9 @@ namespace ToyRaft {
                 break;
             case ::ToyRaft::RaftClientMsg::STATUS: {
                 ServerInnerStatusMsg serverInnerStatusMsg;
-                serverInnerStatusMsg.set_currentleaderid(currentLeaderId);
-                serverInnerStatusMsg.set_commitindex(commitIndex);
-                serverInnerStatusMsg.set_state(state);
-                serverInnerStatusMsg.set_canvote(canVote);
+                std::string innerStatus;
+                RaftSave::getInstance()->getMeta(innerStatus);
+                serverInnerStatusMsg.set_innerstatus(innerStatus);
                 response->set_sendbacktype(RaftServerMsg::OK);
                 std::string serverInnerStatusMsgBuf;
                 serverInnerStatusMsg.SerializeToString(&serverInnerStatusMsgBuf);
@@ -331,9 +330,7 @@ namespace ToyRaft {
         std::vector<std::string> ans;
         ret = RaftSave::getInstance()->getData(from, to - from, ans);
         for (int i = 0; i < ans.size(); i++) {
-            RaftLog log;
-            log.ParseFromString(ans[i]);
-            serverQueryMsg.add_appendlog(log.buf());
+            serverQueryMsg.add_appendlog(ans[i].c_str(), ans[i].size());
         }
         serverQueryMsg.set_commitindex(commit);
         return ret;
