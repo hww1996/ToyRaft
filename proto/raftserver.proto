@@ -50,14 +50,11 @@ message ServerRedirectMsg {
 
 message ServerQueryMsg {
     int64 commitIndex = 1;
-    repeated bytes appendLog = 2;
+    repeated bytes appendLog = 2; // 直接返回原始的raftlog
 }
 
 message ServerInnerStatusMsg {
-    int32 currentLeaderId = 1;
-    int32 state = 2;
-    int32 commitIndex = 3;
-    bool canVote = 4;
+    string innerStatus = 1; // 返回状态的json
 }
 
 message RaftServerMsg {
